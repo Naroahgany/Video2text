@@ -74,9 +74,9 @@ docker run --rm -p 8000:8000 bilibili-transcription-workflow
 4. 免费层级会休眠，恢复访问时可能有冷启动。
 5. 后端本地文件只用于任务运行期间的临时文件，不用于保存历史数据。
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/YOUR_NAME/YOUR_REPO)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Naroahgany/Video2text)
 
-部署前请把按钮中的 `YOUR_NAME/YOUR_REPO` 替换为你的仓库地址。
+按钮已指向当前 GitHub 仓库 `Naroahgany/Video2text`。
 
 ## 环境变量
 

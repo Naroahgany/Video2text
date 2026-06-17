@@ -331,4 +331,5 @@
 ## 当前下一步
 
 - [x] 阶段 1 的本地 Docker 启动验证已完成。
+- [x] GitHub 仓库 `Naroahgany/Video2text` 已创建并推送初始代码。
 - [ ] 进入阶段 2：前端基础 UI、IndexedDB 与模型配置。
