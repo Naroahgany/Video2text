@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B站视频转文字</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">原生 HTML / CSS / JS</p>
+        <h1>B站视频转文字</h1>
+      </header>
+
+      <section class="panel" aria-labelledby="health-title">
+        <div>
+          <h2 id="health-title">服务状态</h2>
+          <p class="muted">后端健康检查</p>
+        </div>
+        <div class="health-row">
+          <span class="status-dot" data-health-dot></span>
+          <span class="status-text" data-health-status>正在检查...</span>
+          <button class="icon-button" type="button" data-refresh-health title="重新检查">
+            ↻
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
