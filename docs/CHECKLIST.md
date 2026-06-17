@@ -39,6 +39,8 @@
 - [x] Docker 镜像配置安装 yt-dlp。
 - [x] 本地 Docker 可以成功启动项目。
 - [x] Render 部署文件结构完整。
+- [x] 阶段 1 已按 `docs/IMPLEMENTATION_PLAN.md` 复核：目录结构、FastAPI 应用导入、健康检查、前端首页、已有 Docker 镜像运行、FFmpeg、yt-dlp 和 Render 部署结构通过当前验证。
+- [x] 阶段 1 判定完成；重新执行 `docker build` 时遇到 Debian 源网络 502 或超时属于环境网络问题，不作为阶段 1 阻塞项，后续需要重建镜像时可使用 README 中的镜像源构建命令。
 
 ## 阶段 2：前端基础 UI、IndexedDB 与模型配置
 
@@ -332,4 +334,5 @@
 
 - [x] 阶段 1 的本地 Docker 启动验证已完成。
 - [x] GitHub 仓库 `Naroahgany/Video2text` 已创建并推送初始代码。
+- [x] 阶段 1 已完成，可进入阶段 2。
 - [ ] 进入阶段 2：前端基础 UI、IndexedDB 与模型配置。
