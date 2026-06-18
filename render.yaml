@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: bilibili-transcription-workflow
-    env: docker
-    plan: free
-    autoDeploy: true
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/health

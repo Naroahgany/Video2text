@@ -4,30 +4,303 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>B站视频转文字</title>
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header class="app-header">
-        <p class="eyebrow">原生 HTML / CSS / JS</p>
-        <h1>B站视频转文字</h1>
+    <main class="app-shell app-state-idle">
+      <header class="topbar" aria-label="页面工具栏">
+        <div class="service-status" aria-label="服务状态">
+          <span class="status-dot" data-health-dot></span>
+          <span data-health-status>正在连接</span>
+          <button class="text-button" type="button" data-refresh-health>刷新</button>
+        </div>
+        <button class="icon-button" type="button" data-open-settings aria-label="打开设置" title="设置">
+          <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h10" />
+            <path d="M18 7h2" />
+            <circle cx="16" cy="7" r="2" />
+            <path d="M4 17h2" />
+            <path d="M10 17h10" />
+            <circle cx="8" cy="17" r="2" />
+          </svg>
+        </button>
       </header>
 
-      <section class="panel" aria-labelledby="health-title">
-        <div>
-          <h2 id="health-title">服务状态</h2>
-          <p class="muted">后端健康检查</p>
+      <section class="workflow-shell" data-workflow-shell>
+        <div class="hero-copy">
+          <h1>B站视频转文字</h1>
         </div>
-        <div class="health-row">
-          <span class="status-dot" data-health-dot></span>
-          <span class="status-text" data-health-status>正在检查...</span>
-          <button class="icon-button" type="button" data-refresh-health title="重新检查">
-            ↻
-          </button>
+
+        <div class="workflow-panel" data-workflow-panel>
+          <div class="workflow-titlebar" data-workflow-titlebar aria-live="polite">
+            <div>
+              <p class="overline">当前视频</p>
+              <h2 data-video-title>等待视频标题</h2>
+            </div>
+          </div>
+
+          <form class="prompt-box" data-input-form>
+            <input
+              data-task-input
+              type="text"
+              placeholder="粘贴 B站分享文本、视频链接或 BV 号"
+              aria-label="B站视频输入"
+            />
+            <div class="prompt-actions">
+              <span class="input-status" data-input-status aria-live="polite"></span>
+              <button class="send-button" type="submit" aria-label="开始识别并创建任务" title="开始">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4 4 12l1.4 1.4 5.6-5.6V20h2V7.8l5.6 5.6L20 12l-8-8Z" />
+                </svg>
+              </button>
+            </div>
+          </form>
+
+          <section class="task-view" data-task-view aria-live="polite">
+            <div class="task-heading">
+              <div>
+                <p class="overline">当前任务</p>
+                <h2 data-stage-text>等待创建任务</h2>
+                <p class="recognized-line" data-recognized-input></p>
+                <p class="error-line" data-error-message></p>
+              </div>
+              <div class="task-actions">
+                <span class="progress-pill" data-progress-label>0%</span>
+                <button class="secondary-button compact" type="button" data-cancel-task disabled>
+                  取消
+                </button>
+                <button class="secondary-button compact reset-button" type="button" data-reset-workflow>
+                  返回输入
+                </button>
+              </div>
+            </div>
+            <progress data-progress-bar max="100" value="0"></progress>
+            <div class="console" role="log" aria-live="polite" data-log-panel></div>
+          </section>
+
+          <section class="result-view" data-result-view aria-live="polite">
+            <div class="result-heading">
+              <div>
+                <p class="overline">最终文稿</p>
+                <h2>转换完成</h2>
+              </div>
+              <div class="result-actions">
+                <button class="secondary-button compact reset-button" type="button" data-reset-workflow>
+                  再次输入
+                </button>
+                <button class="secondary-button" type="button" data-download-markdown disabled>
+                  下载 Markdown
+                </button>
+              </div>
+            </div>
+            <article class="markdown-preview" data-final-markdown></article>
+            <details class="intermediate-panel">
+              <summary>中间结果</summary>
+              <div class="intermediate-grid">
+                <section>
+                  <h3>清理后的 B站字幕</h3>
+                  <pre data-clean-subtitle>暂无内容</pre>
+                </section>
+                <section>
+                  <h3>AI 音频转文字稿</h3>
+                  <pre data-ai-transcript>暂无内容</pre>
+                </section>
+                <section>
+                  <h3>完整日志</h3>
+                  <pre data-full-log>暂无内容</pre>
+                </section>
+              </div>
+            </details>
+          </section>
         </div>
       </section>
     </main>
 
-    <script type="module" src="/src/main.js"></script>
+    <div class="modal-overlay" data-subtitle-modal hidden>
+      <div class="modal-backdrop" data-dismiss-subtitle-modal></div>
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="subtitle-dialog-title">
+        <header class="dialog-header">
+          <h2 id="subtitle-dialog-title">字幕处理失败</h2>
+          <button
+            class="icon-button subtle"
+            type="button"
+            data-dismiss-subtitle-modal
+            aria-label="关闭字幕提示"
+            title="关闭"
+          >
+            <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+        <p data-subtitle-error-text></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-dismiss-subtitle-modal>
+            关闭
+          </button>
+          <button class="primary-button" type="button" data-skip-subtitle>
+            跳过字幕继续
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="settings-overlay" data-settings-overlay hidden>
+      <div class="settings-backdrop" data-close-settings></div>
+      <aside class="settings-drawer" aria-label="设置">
+        <header class="drawer-header">
+          <button
+            class="icon-button subtle"
+            type="button"
+            data-settings-back
+            aria-label="返回设置列表"
+            title="返回设置列表"
+            hidden
+          >
+            <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 6 9 12l6 6" />
+            </svg>
+          </button>
+          <h2 data-settings-title>设置</h2>
+          <button class="icon-button subtle" type="button" data-close-settings aria-label="关闭设置" title="关闭">
+            <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <section class="settings-page is-active" data-settings-page="menu">
+          <button class="settings-row" type="button" data-open-settings-page="models">
+            <span>模型配置</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6L9 5Z" />
+            </svg>
+          </button>
+          <button class="settings-row" type="button" data-open-settings-page="history">
+            <span>历史记录</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6L9 5Z" />
+            </svg>
+          </button>
+        </section>
+
+        <section class="settings-page" data-settings-page="models">
+          <p class="drawer-note" data-config-status>未保存</p>
+
+          <form class="model-card" data-model-kind="transcription">
+            <div class="model-card-header">
+              <h3>音频转文字模型</h3>
+              <button type="button" class="primary-button" data-save-config>保存配置</button>
+            </div>
+            <label>
+              API Base URL
+              <input name="baseUrl" type="url" placeholder="https://api.example.com/v1" />
+            </label>
+            <label>
+              API Key
+              <input name="apiKey" type="password" autocomplete="off" />
+            </label>
+            <label class="model-field">
+              Model
+              <div class="model-control-row">
+                <div class="model-input-shell">
+                  <input
+                    name="model"
+                    type="text"
+                    list="transcription-model-options"
+                    autocomplete="off"
+                  />
+                  <select
+                    class="model-picker"
+                    data-model-picker
+                    aria-label="选择已获取的音频转文字模型"
+                    disabled
+                  ></select>
+                </div>
+                <button type="button" class="secondary-button" data-fetch-models>获取模型</button>
+              </div>
+              <datalist id="transcription-model-options" data-model-options></datalist>
+            </label>
+            <div class="field-row">
+              <label>
+                Temperature
+                <input name="temperature" type="number" min="0" max="2" step="0.1" />
+              </label>
+              <label class="checkbox-field">
+                <input name="stream" type="checkbox" />
+                Stream
+              </label>
+            </div>
+          </form>
+
+          <form class="model-card" data-model-kind="refine">
+            <div class="model-card-header">
+              <h3>文稿优化模型</h3>
+              <button type="button" class="primary-button" data-save-config>保存配置</button>
+            </div>
+            <label>
+              API Base URL
+              <input name="baseUrl" type="url" placeholder="https://api.example.com/v1" />
+            </label>
+            <label>
+              API Key
+              <input name="apiKey" type="password" autocomplete="off" />
+            </label>
+            <label class="model-field">
+              Model
+              <div class="model-control-row">
+                <div class="model-input-shell">
+                  <input
+                    name="model"
+                    type="text"
+                    list="refine-model-options"
+                    autocomplete="off"
+                  />
+                  <select
+                    class="model-picker"
+                    data-model-picker
+                    aria-label="选择已获取的文稿优化模型"
+                    disabled
+                  ></select>
+                </div>
+                <button type="button" class="secondary-button" data-fetch-models>获取模型</button>
+              </div>
+              <datalist id="refine-model-options" data-model-options></datalist>
+            </label>
+            <div class="field-row">
+              <label>
+                Temperature
+                <input name="temperature" type="number" min="0" max="2" step="0.1" />
+              </label>
+              <label class="checkbox-field">
+                <input name="stream" type="checkbox" />
+                Stream
+              </label>
+            </div>
+          </form>
+        </section>
+
+        <section class="settings-page" data-settings-page="history">
+          <input data-history-search type="search" placeholder="搜索历史记录" />
+          <div class="history-tools">
+            <span data-history-count>0 条</span>
+            <div class="button-row">
+              <button type="button" class="secondary-button" data-export-data>导出</button>
+              <button type="button" class="secondary-button" data-import-data>导入</button>
+              <button type="button" class="danger-button" data-clear-history>清空</button>
+              <input data-import-file type="file" accept="application/json,.json" hidden />
+            </div>
+          </div>
+          <div class="history-list" data-history-list>
+            <p class="empty-text">暂无历史记录</p>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

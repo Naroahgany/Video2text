@@ -1,14 +1,14 @@
 # B站视频转文字
 
-一个面向个人使用和开源自部署的 B站视频转文字小型 Workflow / 小型 Agent 项目。当前处于阶段 1：工程骨架与部署基础，已建立 FastAPI 后端、原生 HTML/CSS/JS 前端、Docker 和 Render 部署结构。
+一个面向个人使用的 B站视频转文字小型 Workflow / 小型 Agent 项目。项目主线是 Windows / Mac 本地桌面 zip 启动版：用户下载仓库 zip 后，通过启动脚本在本机准备环境、启动本地服务，并在浏览器中打开本地网页使用。
 
 ## 当前状态
 
 - 后端：Python FastAPI。
 - 前端：原生 HTML/CSS/JS。
-- 部署：Docker + Render Blueprint。
-- 数据：后续阶段将把模型配置和历史记录保存在浏览器 IndexedDB，后端不做长期保存。
-- 业务功能：B站解析、字幕处理、音频处理、模型调用、历史记录将在后续阶段逐步实现。
+- 运行：本地 zip / 桌面启动版。
+- 数据：模型配置和历史记录保存在浏览器 IndexedDB，后端不做长期保存。
+- 当前下一阶段：阶段 4.1，本地桌面启动版与自动环境准备。
 
 ## 功能规划
 
@@ -19,6 +19,8 @@
 - 在前端保存历史记录、导出、导入和搜索。
 
 ## 本地运行
+
+当前阶段可用开发方式启动本地服务。阶段 4.1 会补齐面向普通用户的 Windows / Mac 双击启动脚本、Python / FFmpeg 检测、依赖安装和端口自动选择。
 
 需要 Python 3.12+，并确保本机已安装 FFmpeg。
 
@@ -41,42 +43,27 @@ http://127.0.0.1:8000
 http://127.0.0.1:8000/api/health
 ```
 
-## Docker 运行
+## Windows 本地启动
 
-```powershell
-docker build -t bilibili-transcription-workflow .
-docker run --rm -p 8000:8000 bilibili-transcription-workflow
-```
+阶段 4.1 将提供 Windows 启动脚本，例如 `start-windows.bat` 或等价脚本。目标流程：
 
-Docker 镜像会安装 FFmpeg，并通过 `backend/requirements.txt` 安装 FastAPI、Uvicorn、yt-dlp 和 httpx。
+1. 双击启动脚本。
+2. 脚本检测 Python、FFmpeg、依赖和端口。
+3. 缺少必要环境时，脚本尝试使用官方来源准备运行时，或给出明确排错建议。
+4. 服务启动后自动打开默认浏览器访问本地页面。
 
-如果本地网络访问 Debian 或 PyPI 较慢，可以在本地构建时临时指定镜像源：
+在启动脚本完成前，可使用上方“本地运行”的开发方式启动。
 
-```powershell
-docker build --progress=plain `
-  --build-arg APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/debian `
-  --build-arg APT_SECURITY_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/debian-security `
-  --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple `
-  -t bilibili-transcription-workflow .
-```
+## Mac 本地启动
 
-构建成功后再运行容器：
+阶段 4.1 将提供 Mac 启动脚本，例如 `start-mac.command` 或等价脚本。目标流程：
 
-```powershell
-docker run --rm -p 8000:8000 bilibili-transcription-workflow
-```
+1. 首次运行时按系统提示授予脚本执行权限。
+2. 双击启动脚本。
+3. 脚本检测 Python、FFmpeg、依赖和端口。
+4. 服务启动后自动打开默认浏览器访问本地页面。
 
-## Render 部署
-
-1. Fork 本仓库到自己的 GitHub 账号。
-2. 在 Render 中使用 Blueprint 或 Deploy to Render 按钮创建服务。
-3. Render 会根据 `render.yaml` 使用 Dockerfile 自动构建。
-4. 免费层级会休眠，恢复访问时可能有冷启动。
-5. 后端本地文件只用于任务运行期间的临时文件，不用于保存历史数据。
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Naroahgany/Video2text)
-
-按钮已指向当前 GitHub 仓库 `Naroahgany/Video2text`。
+在启动脚本完成前，可使用上方“本地运行”的开发方式启动。
 
 ## 环境变量
 
@@ -84,23 +71,28 @@ docker run --rm -p 8000:8000 bilibili-transcription-workflow
 
 后续模型 API Key 将由用户在浏览器前端填写并保存在 IndexedDB 中，任务开始时临时发送给后端。不要把 API Key 写入 `.env`、日志或仓库文件。
 
+## B站访问排错
+
+- `HTTP 412 Precondition Failed`：通常表示 B站风控或访问前置条件失败，不代表程序整体损坏；后续阶段 4.2 会提供本地高级访问模式。
+- `Could not copy Chrome cookie database`：通常表示浏览器 Cookie 数据库被占用或本机浏览器限制；可尝试关闭浏览器后台进程，或在后续高级访问模式中选择其他浏览器来源。
+- `yt-dlp 解析失败`：先升级 yt-dlp，再复查视频权限、链接格式和网络访问状态。
+- `视频需要登录、付费或受限`：MVP 不支持处理这类内容，会返回明确提示。
+
 ## 常见错误排查
 
-- `FFmpeg 不可用`：确认本机或 Docker 镜像中已安装 FFmpeg。
-- `端口被占用`：修改启动命令中的 `--port`，或设置 Render 的 `PORT`。
+- `FFmpeg 不可用`：确认本机已安装 FFmpeg，或等待阶段 4.1 启动脚本自动准备 FFmpeg。
+- `端口被占用`：开发方式可修改启动命令中的 `--port`；阶段 4.1 启动脚本会自动选择可用端口。
 - `前端健康检查失败`：确认后端服务已启动，并访问 `/api/health`。
-- `apt-get update` 或 `apt-get install` 失败：通常是本地网络无法访问 Debian 源。使用上文带 `APT_MIRROR` 和 `APT_SECURITY_MIRROR` 的 Docker 构建命令重试。
-- `docker run` 提示找不到 `bilibili-transcription-workflow`：说明镜像还没有构建成功。先确保 `docker build` 成功，再运行 `docker run`。
-- `yt-dlp 解析失败`：后续阶段接入真实 B站处理后，请先升级 yt-dlp 再复查视频权限和链接格式。
+- `依赖安装失败`：检查 Python 版本、网络连接和虚拟环境是否已激活。
 
 ## 数据隐私
 
 - 后端不保存用户 API Key。
 - 后端不把 API Key 写入日志或响应。
-- 后续任务产生的音频和中间文本只在当前任务期间临时处理。
-- 历史记录和模型配置将保存在用户浏览器 IndexedDB 中。
+- 任务产生的音频和中间文本只在当前任务期间临时处理。
+- 历史记录和模型配置保存在用户浏览器 IndexedDB 中。
 - 清空浏览器数据可能删除历史记录，迁移浏览器或电脑前需要先导出数据再导入。
 
 ## 使用边界
 
-本项目只适合处理用户有权处理的视频内容，用于个人学习整理、研究或已获授权的场景。MVP 不支持需要登录权限、付费或受限的视频内容。长视频或大量任务建议自行升级部署资源。
+本项目只适合处理用户有权处理的视频内容，用于个人学习整理、研究或已获授权的场景。MVP 不支持需要登录权限、付费或受限的视频内容。长视频或大量任务需要预留足够本机磁盘、CPU、内存和网络时间。
