@@ -10,6 +10,11 @@ from typing import Iterable
 SECRET_PATTERNS = (
     re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
     re.compile(r"(Authorization\s*[:=]\s*)(Bearer\s+)?[^\s,;]+", re.IGNORECASE),
+    re.compile(r"(Cookie\s*[:=]\s*)[^\r\n]+", re.IGNORECASE),
+    re.compile(
+        r"\b((?:SESSDATA|bili_jct|DedeUserID|DedeUserID__ckMd5|bili_ticket|bili_ticket_expires)\s*=\s*)[^;\s]+",
+        re.IGNORECASE,
+    ),
     re.compile(r"(api[_-]?key\s*[:=]\s*)[^\s,;]+", re.IGNORECASE),
     re.compile(r"sk-[A-Za-z0-9_-]{8,}"),
     re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),

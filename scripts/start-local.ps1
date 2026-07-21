@@ -1,0 +1,319 @@
+$ErrorActionPreference = "Stop"
+
+Set-Location (Resolve-Path (Join-Path $PSScriptRoot ".."))
+$ProjectRoot = (Get-Location).Path
+$RuntimeDir = Join-Path $ProjectRoot "runtime"
+$DownloadsDir = Join-Path $RuntimeDir "downloads"
+$ToolsDir = Join-Path $RuntimeDir "tools"
+$DataDir = Join-Path $ProjectRoot "data"
+$LogsDir = Join-Path $ProjectRoot "logs"
+$TempDir = Join-Path $DataDir "temp"
+$VenvDir = Join-Path $RuntimeDir ".venv"
+$DependencyStamp = Join-Path $RuntimeDir ".dependencies-installed"
+$RequirementsFile = Join-Path $ProjectRoot "backend\requirements.txt"
+$PythonInstaller = Join-Path $DownloadsDir "python-3.12.8-amd64.exe"
+$PythonInstallDir = Join-Path $ToolsDir "python-3.12"
+$FfmpegZip = Join-Path $DownloadsDir "ffmpeg-release-essentials.zip"
+$FfmpegDir = Join-Path $ToolsDir "ffmpeg"
+$OfficialWindowsPythonUrl = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+$WindowsPythonUrl = if ($env:VIDEO2TEXT_PYTHON_URL) { $env:VIDEO2TEXT_PYTHON_URL } else { "https://mirrors.tuna.tsinghua.edu.cn/python/3.12.8/python-3.12.8-amd64.exe" }
+$WindowsFfmpegUrl = if ($env:VIDEO2TEXT_FFMPEG_URL) { $env:VIDEO2TEXT_FFMPEG_URL } else { "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" }
+$DefaultPipIndexUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+function Write-Step($Message) {
+  Write-Host "[INFO] $Message"
+}
+
+function Write-Fail($Message, $Suggestion) {
+  Write-Host "[ERROR] $Message" -ForegroundColor Red
+  Write-Host "[NEXT] $Suggestion" -ForegroundColor Yellow
+}
+
+function Write-DownloadNotice($Name, $Url, $Target) {
+  Write-Host ""
+  Write-Host "【环境准备】未检测到可用的 $Name，启动脚本将自动下载并准备它。" -ForegroundColor Cyan
+  Write-Host "下载来源：$Url" -ForegroundColor Cyan
+  Write-Host "保存位置：$Target" -ForegroundColor Cyan
+  Write-Host "请保持网络连接并等待下载完成，后续再次启动会优先复用已安装的本地文件。" -ForegroundColor Cyan
+  Write-Host ""
+}
+
+function Ensure-Directory($Path) {
+  if (-not (Test-Path $Path)) {
+    New-Item -ItemType Directory -Path $Path | Out-Null
+  }
+}
+
+function Use-DomesticInstallDefaults {
+  if (-not $env:PIP_INDEX_URL) {
+    $env:PIP_INDEX_URL = $DefaultPipIndexUrl
+    Write-Step "Using default PyPI mirror for mainland direct network: $DefaultPipIndexUrl"
+  } else {
+    Write-Step "Using user configured PyPI index: $env:PIP_INDEX_URL"
+  }
+
+  if ($env:PLAYWRIGHT_DOWNLOAD_HOST) {
+    Write-Step "Using user configured Playwright browser mirror: $env:PLAYWRIGHT_DOWNLOAD_HOST"
+  }
+}
+
+function Test-PythonCommand($Command) {
+  try {
+    $VersionOutput = & $Command --version 2>&1
+    if ($LASTEXITCODE -eq 0 -and "$VersionOutput" -match "Python 3\.(1[0-9]|[2-9][0-9])\.") {
+      return $true
+    }
+  } catch {
+    return $false
+  }
+  return $false
+}
+
+function Get-SystemPython {
+  if (Get-Command python -ErrorAction SilentlyContinue) {
+    if (Test-PythonCommand "python") {
+      return "python"
+    }
+  }
+
+  if (Get-Command py -ErrorAction SilentlyContinue) {
+    try {
+      $VersionOutput = & py -3 --version 2>&1
+      if ($LASTEXITCODE -eq 0 -and "$VersionOutput" -match "Python 3\.(1[0-9]|[2-9][0-9])\.") {
+        return "py -3"
+      }
+    } catch {}
+  }
+
+  return $null
+}
+
+function Ensure-EmbeddedPython {
+  $PythonExe = Join-Path $PythonInstallDir "python.exe"
+  if (Test-Path $PythonExe) {
+    return $PythonExe
+  }
+
+  Write-DownloadNotice "Python 3.12" $WindowsPythonUrl $PythonInstaller
+  Ensure-Directory $DownloadsDir
+  Ensure-Directory $PythonInstallDir
+  if (-not (Test-Path $PythonInstaller)) {
+    $PythonUrls = @($WindowsPythonUrl)
+    if ($WindowsPythonUrl -ne $OfficialWindowsPythonUrl) {
+      $PythonUrls += $OfficialWindowsPythonUrl
+    }
+    $Downloaded = $false
+    foreach ($Url in $PythonUrls) {
+      try {
+        Write-Step "Downloading Python from: $Url"
+        Invoke-WebRequest -Uri $Url -OutFile $PythonInstaller
+        $Downloaded = $true
+        break
+      } catch {
+        Write-Step "Python download failed from $($Url): $($_.Exception.Message)"
+        if (Test-Path $PythonInstaller) {
+          Remove-Item -LiteralPath $PythonInstaller -Force -ErrorAction SilentlyContinue
+        }
+      }
+    }
+    if (-not $Downloaded) {
+      throw "Python installer could not be downloaded from configured sources."
+    }
+  } else {
+    Write-Step "Reusing downloaded Python installer: $PythonInstaller"
+  }
+  Write-Step "Installing Python to runtime/tools/python-3.12."
+  Start-Process -FilePath $PythonInstaller -ArgumentList "/quiet InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir=`"$PythonInstallDir`"" -Wait
+
+  if (-not (Test-Path $PythonExe)) {
+    throw "Python installer finished but python.exe was not found."
+  }
+  return $PythonExe
+}
+
+function Get-PythonCommand {
+  Write-Step "Checking Python."
+  $SystemPython = Get-SystemPython
+  if ($SystemPython) {
+    Write-Step "Using existing Python: $SystemPython"
+    return $SystemPython
+  }
+
+  try {
+    $PythonExe = Ensure-EmbeddedPython
+    Write-Step "Using local Python runtime: $PythonExe"
+    return "`"$PythonExe`""
+  } catch {
+    Write-Fail "Unable to prepare Python automatically." "Install Python 3.12 from https://www.python.org/downloads/ and run start-windows.bat again."
+    throw
+  }
+}
+
+function Ensure-Ffmpeg($VenvPython) {
+  Write-Step "Checking FFmpeg."
+  if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+    Write-Step "Using system FFmpeg."
+    return
+  }
+
+  $LocalFfmpeg = Get-ChildItem -Path $FfmpegDir -Filter ffmpeg.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($LocalFfmpeg) {
+    $env:PATH = "$($LocalFfmpeg.DirectoryName);$env:PATH"
+    Write-Step "Using local FFmpeg: $($LocalFfmpeg.FullName)"
+    return
+  }
+
+  if (Use-ImageioFfmpeg $VenvPython) {
+    return
+  }
+
+  try {
+    Write-DownloadNotice "FFmpeg" $WindowsFfmpegUrl $FfmpegZip
+    Ensure-Directory $DownloadsDir
+    Ensure-Directory $FfmpegDir
+    if (-not (Test-Path $FfmpegZip)) {
+      Invoke-WebRequest -Uri $WindowsFfmpegUrl -OutFile $FfmpegZip
+    } else {
+      Write-Step "Reusing downloaded FFmpeg archive: $FfmpegZip"
+    }
+    Expand-Archive -Path $FfmpegZip -DestinationPath $FfmpegDir -Force
+    $LocalFfmpeg = Get-ChildItem -Path $FfmpegDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+    if (-not $LocalFfmpeg) {
+      throw "ffmpeg.exe was not found after extraction."
+    }
+    $env:PATH = "$($LocalFfmpeg.DirectoryName);$env:PATH"
+    Write-Step "Using local FFmpeg: $($LocalFfmpeg.FullName)"
+  } catch {
+    Write-Fail "Unable to prepare FFmpeg automatically." "Install FFmpeg manually or check your network, then run start-windows.bat again."
+    throw
+  }
+}
+
+function Use-ImageioFfmpeg($VenvPython) {
+  try {
+    Write-Step "Preparing FFmpeg from imageio-ffmpeg via PyPI mirror."
+    & $VenvPython -m pip install imageio-ffmpeg
+    if ($LASTEXITCODE -ne 0) {
+      throw "imageio-ffmpeg installation failed."
+    }
+    $ImageioFfmpeg = (& $VenvPython -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" 2>$null | Select-Object -First 1).Trim()
+    if ($ImageioFfmpeg -and (Test-Path $ImageioFfmpeg)) {
+      $ImageioDir = Split-Path -Parent $ImageioFfmpeg
+      $env:PATH = "$ImageioDir;$env:PATH"
+      Write-Step "Using imageio-ffmpeg binary: $ImageioFfmpeg"
+      return $true
+    }
+    Write-Step "imageio-ffmpeg did not return a usable ffmpeg executable."
+  } catch {
+    Write-Step "imageio-ffmpeg preparation failed: $($_.Exception.Message)"
+  }
+  return $false
+}
+
+function Ensure-Venv($PythonCommand) {
+  Write-Step "Creating or reusing local virtual environment."
+  $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+  if (-not (Test-Path $VenvPython)) {
+    Invoke-Expression "$PythonCommand -m venv `"$VenvDir`""
+  }
+  return $VenvPython
+}
+
+function Install-Dependencies($VenvPython) {
+  $RequirementsStamp = ""
+  if (Test-Path $RequirementsFile) {
+    $RequirementsStamp = (Get-FileHash $RequirementsFile -Algorithm SHA256).Hash
+  }
+  $CurrentStamp = ""
+  if (Test-Path $DependencyStamp) {
+    $CurrentStamp = Get-Content $DependencyStamp -Raw
+  }
+
+  if ($CurrentStamp.Trim() -eq $RequirementsStamp -and $RequirementsStamp) {
+    Write-Step "Backend dependencies are already installed; skipping pip install."
+    return
+  }
+
+  Write-Step "Installing backend dependencies. First launch or dependency changes may download packages."
+  & $VenvPython -m pip install --upgrade pip
+  & $VenvPython -m pip install -r $RequirementsFile
+  Set-Content -Path $DependencyStamp -Value $RequirementsStamp
+}
+
+function Test-PortAvailable($Port) {
+  $Listener = $null
+  try {
+    $Listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse("127.0.0.1"), $Port)
+    $Listener.Start()
+    return $true
+  } catch {
+    return $false
+  } finally {
+    if ($Listener) {
+      $Listener.Stop()
+    }
+  }
+}
+
+function Get-AvailablePort {
+  for ($Port = 8000; $Port -le 8099; $Port++) {
+    if (Test-PortAvailable $Port) {
+      return $Port
+    }
+  }
+  throw "No available port found between 8000 and 8099."
+}
+
+function Start-BrowserAfterHealthCheck($Url) {
+  $HealthUrl = "$Url/api/health"
+  Start-Job -ArgumentList $Url, $HealthUrl -ScriptBlock {
+    param($OpenUrl, $ProbeUrl)
+
+    for ($Attempt = 0; $Attempt -lt 240; $Attempt++) {
+      try {
+        $Response = Invoke-WebRequest -Uri $ProbeUrl -UseBasicParsing -TimeoutSec 1
+        if ($Response.StatusCode -eq 200) {
+          Start-Process $OpenUrl
+          return
+        }
+      } catch {}
+
+      Start-Sleep -Milliseconds 500
+    }
+  } | Out-Null
+}
+
+try {
+  Write-Host "Bilibili Video to Text - local desktop startup"
+  Ensure-Directory $RuntimeDir
+  Ensure-Directory $DownloadsDir
+  Ensure-Directory $ToolsDir
+  Ensure-Directory $DataDir
+  Ensure-Directory $LogsDir
+  Ensure-Directory $TempDir
+  Use-DomesticInstallDefaults
+
+  $PythonCommand = Get-PythonCommand
+  $VenvPython = Ensure-Venv $PythonCommand
+  Install-Dependencies $VenvPython
+  Ensure-Ffmpeg $VenvPython
+
+  $Port = Get-AvailablePort
+  $Url = "http://127.0.0.1:$Port"
+  if ($Port -ne 8000) {
+    Write-Step "Port 8000 is busy. Using port $Port instead."
+  }
+
+  $env:PORT = "$Port"
+  $env:TEMP_DIR = $TempDir
+  $env:GLOBAL_TASK_CONCURRENCY = "1"
+  $env:AUDIO_REQUEST_CONCURRENCY = "2"
+
+  Write-Step "Starting FastAPI service. Keep this window open while using the app."
+  Write-Step "Browser will open after local health check passes: $Url"
+  Start-BrowserAfterHealthCheck $Url
+  & $VenvPython -m uvicorn backend.app.main:app --host 127.0.0.1 --port $Port
+} catch {
+  Write-Fail "Startup stopped: $($_.Exception.Message)" "Check network access, Python/FFmpeg/Playwright installation, mirror settings, and whether another app is using ports 8000-8099."
+  exit 1
+}

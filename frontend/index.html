@@ -10,10 +10,16 @@
   <body>
     <main class="app-shell app-state-idle">
       <header class="topbar" aria-label="页面工具栏">
-        <div class="service-status" aria-label="服务状态">
-          <span class="status-dot" data-health-dot></span>
-          <span data-health-status>正在连接</span>
-          <button class="text-button" type="button" data-refresh-health>刷新</button>
+        <div class="topbar-status-stack">
+          <div class="service-status" aria-label="服务状态">
+            <span class="status-dot" data-health-dot></span>
+            <span data-health-status>正在连接</span>
+            <button class="text-button" type="button" data-refresh-health>刷新</button>
+          </div>
+          <div class="page-warning" data-page-warning hidden aria-live="polite">
+            <span class="status-dot" data-state="warning"></span>
+            <span>检测到多个前端页面，请关闭其他页面后再提交任务。</span>
+          </div>
         </div>
         <button class="icon-button" type="button" data-open-settings aria-label="打开设置" title="设置">
           <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -27,7 +33,7 @@
         </button>
       </header>
 
-      <section class="workflow-shell" data-workflow-shell>
+      <section class="workflow-shell" data-workflow-shell hidden>
         <div class="hero-copy">
           <h1>B站视频转文字</h1>
         </div>
@@ -37,6 +43,7 @@
             <div>
               <p class="overline">当前视频</p>
               <h2 data-video-title>等待视频标题</h2>
+              <h3 data-video-part-title hidden></h3>
             </div>
           </div>
 
@@ -60,9 +67,11 @@
           <section class="task-view" data-task-view aria-live="polite">
             <div class="task-heading">
               <div>
-                <p class="overline">当前任务</p>
+                <div class="heading-label-row">
+                  <p class="overline">当前任务</p>
+                  <span class="elapsed-timer" data-task-elapsed hidden>0s</span>
+                </div>
                 <h2 data-stage-text>等待创建任务</h2>
-                <p class="recognized-line" data-recognized-input></p>
                 <p class="error-line" data-error-message></p>
               </div>
               <div class="task-actions">
@@ -82,32 +91,53 @@
           <section class="result-view" data-result-view aria-live="polite">
             <div class="result-heading">
               <div>
-                <p class="overline">最终文稿</p>
+                <div class="heading-label-row">
+                  <p class="overline">最终文稿</p>
+                  <span class="elapsed-timer" data-result-duration hidden>0s</span>
+                </div>
                 <h2>转换完成</h2>
               </div>
               <div class="result-actions">
-                <button class="secondary-button compact reset-button" type="button" data-reset-workflow>
-                  再次输入
-                </button>
                 <button class="secondary-button" type="button" data-download-markdown disabled>
-                  下载 Markdown
+                  下载Markdown
+                </button>
+                <button class="secondary-button" type="button" data-copy-markdown disabled>
+                  复制Markdown
+                </button>
+                <button class="secondary-button reset-button" type="button" data-reset-workflow>
+                  再次输入
                 </button>
               </div>
             </div>
             <article class="markdown-preview" data-final-markdown></article>
-            <details class="intermediate-panel">
+            <details class="intermediate-panel" data-intermediate-panel>
               <summary>中间结果</summary>
               <div class="intermediate-grid">
                 <section>
-                  <h3>清理后的 B站字幕</h3>
+                  <div class="intermediate-title-row">
+                    <h3>清理后的 B站字幕</h3>
+                    <button class="secondary-button" type="button" data-download-clean-subtitle disabled>
+                      下载 TXT
+                    </button>
+                  </div>
                   <pre data-clean-subtitle>暂无内容</pre>
                 </section>
                 <section>
-                  <h3>AI 音频转文字稿</h3>
+                  <div class="intermediate-title-row">
+                    <h3>AI 音频转文字稿</h3>
+                    <button class="secondary-button" type="button" data-download-ai-transcript disabled>
+                      下载 TXT
+                    </button>
+                  </div>
                   <pre data-ai-transcript>暂无内容</pre>
                 </section>
                 <section>
-                  <h3>完整日志</h3>
+                  <div class="intermediate-title-row">
+                    <h3>完整日志</h3>
+                    <button class="secondary-button" type="button" data-download-full-log disabled>
+                      下载 TXT
+                    </button>
+                  </div>
                   <pre data-full-log>暂无内容</pre>
                 </section>
               </div>
@@ -147,6 +177,70 @@
       </section>
     </div>
 
+    <div class="modal-overlay" data-transcription-retry-modal hidden>
+      <div class="modal-backdrop" data-dismiss-transcription-retry-modal></div>
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="transcription-dialog-title">
+        <header class="dialog-header">
+          <h2 id="transcription-dialog-title">音频转文字失败</h2>
+          <button
+            class="icon-button subtle"
+            type="button"
+            data-dismiss-transcription-retry-modal
+            aria-label="关闭音频转文字提示"
+            title="关闭"
+          >
+            <svg class="stroke-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+        <p data-transcription-retry-error-text></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-cancel-transcription-task>
+            取消任务
+          </button>
+          <button class="secondary-button" type="button" data-change-transcription-model>
+            更换模型
+          </button>
+          <button class="primary-button" type="button" data-retry-transcription>
+            重试阶段6
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-overlay" data-credential-modal>
+      <div class="modal-backdrop"></div>
+      <section class="dialog credential-dialog" role="dialog" aria-modal="true" aria-labelledby="credential-dialog-title">
+        <header class="dialog-header">
+          <h2 id="credential-dialog-title">欢迎使用B站视频转文字工具</h2>
+          <button type="button" class="secondary-button compact" data-close-credential-guide>
+            关闭
+          </button>
+        </header>
+        <p class="credential-copy">
+          本工具需要本机B站登录态来稳定获取字幕。<br />
+          点击“打开B站登录窗口”后，请在新窗口完成扫码或账号登录；<br />
+          登录完成后先保持B站窗口打开，回到这里点击“提取并保存Cookie”，提取成功后程序会关闭该窗口。
+        </p>
+        <div class="credential-actions">
+          <button type="button" class="primary-button" data-open-bilibili-login-guide>
+            打开B站登录窗口
+          </button>
+          <button type="button" class="secondary-button" data-extract-bilibili-cookie>
+            提取并保存Cookie
+          </button>
+        </div>
+        <p class="credential-status" data-credential-status aria-live="polite">
+          正在检查本地 IndexedDB 中的精简 Cookie。
+        </p>
+        <div class="credential-model-note">
+          <p>音频转文字模型和文稿优化模型配置仍在右上角设置中保存；阶段 4.3 不执行预设音频测试。</p>
+        </div>
+      </section>
+    </div>
+
     <div class="settings-overlay" data-settings-overlay hidden>
       <div class="settings-backdrop" data-close-settings></div>
       <aside class="settings-drawer" aria-label="设置">
@@ -179,6 +273,12 @@
               <path d="m9 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6L9 5Z" />
             </svg>
           </button>
+          <button class="settings-row" type="button" data-open-settings-page="bilibili-access">
+            <span>本地Cookie值</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 5 7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6L9 5Z" />
+            </svg>
+          </button>
           <button class="settings-row" type="button" data-open-settings-page="history">
             <span>历史记录</span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -196,8 +296,25 @@
               <button type="button" class="primary-button" data-save-config>保存配置</button>
             </div>
             <label>
-              API Base URL
-              <input name="baseUrl" type="url" placeholder="https://api.example.com/v1" />
+              音频识别方式
+              <select name="provider" class="provider-select">
+                <option value="openai_compatible_input_audio">OpenAI Compatible 需要多模态模型</option>
+                <option value="aistudio_to_api_gemini_file">AIStudioToAPI Gemini 原生：Files API</option>
+              </select>
+            </label>
+            <label>
+              <span class="model-field-label">
+                <span>API Base URL</span>
+                <a
+                  class="provider-signup-link"
+                  data-openai-signup-link
+                  href="https://cloud.siliconflow.cn/i/shbga9zr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  hidden
+                >&#x63A8;&#x8350;&#x4F7F;&#x7528;&#x7845;&#x57FA;&#x6D41;&#x52A8;API&#xFF0C;&#x4FBF;&#x5B9C;&#x7A33;&#x5B9A;&#xFF0C;&#x70B9;&#x51FB;&#x6CE8;&#x518C;</a>
+              </span>
+              <input name="baseUrl" type="url" placeholder="https://api.siliconflow.cn/v1" />
             </label>
             <label>
               API Key
@@ -212,6 +329,7 @@
                     type="text"
                     list="transcription-model-options"
                     autocomplete="off"
+                    placeholder="例如：Qwen/Qwen3-Omni-30B-A3B-Instruct"
                   />
                   <select
                     class="model-picker"
@@ -283,14 +401,37 @@
           </form>
         </section>
 
+        <section class="settings-page" data-settings-page="bilibili-access">
+          <form class="local-cookie-card" data-bilibili-access-form>
+            <label class="local-cookie-field">
+              <span>本地Cookie值</span>
+              <textarea
+                class="local-cookie-textarea"
+                data-bilibili-cookie-header
+                rows="8"
+                readonly
+                placeholder="尚未保存本地Cookie值"
+              ></textarea>
+            </label>
+            <div class="local-cookie-actions">
+              <button type="button" class="secondary-button" data-refresh-local-cookie>重新获取</button>
+              <button type="button" class="secondary-button" data-clear-local-cookie>清除</button>
+              <button type="button" class="secondary-button" data-copy-local-cookie>复制</button>
+            </div>
+          </form>
+        </section>
+
         <section class="settings-page" data-settings-page="history">
-          <input data-history-search type="search" placeholder="搜索历史记录" />
+          <input data-history-search type="search" placeholder="搜索标题、正文、字幕、转写稿或错误信息" />
           <div class="history-tools">
             <span data-history-count>0 条</span>
+            <p class="history-export-note">
+              导出文件会包含模型配置、历史结果和精简 B站 Cookie；它是敏感本地备份，请不要外传。
+            </p>
             <div class="button-row">
               <button type="button" class="secondary-button" data-export-data>导出</button>
               <button type="button" class="secondary-button" data-import-data>导入</button>
-              <button type="button" class="danger-button" data-clear-history>清空</button>
+              <button type="button" class="danger-button" data-clear-history>清空本地数据</button>
               <input data-import-file type="file" accept="application/json,.json" hidden />
             </div>
           </div>
@@ -298,6 +439,7 @@
             <p class="empty-text">暂无历史记录</p>
           </div>
         </section>
+
       </aside>
     </div>
 

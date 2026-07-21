@@ -8,6 +8,8 @@ const state = {
     status: "idle",
     progress: 0,
     stage: "等待创建任务",
+    currentItem: "",
+    originalInput: "",
     recognizedInput: "",
     videoTitle: "",
     logs: [],
@@ -15,6 +17,12 @@ const state = {
     cleanSubtitle: "",
     aiTranscript: "",
     filename: "final.md",
+    pIndex: null,
+    subTasks: [],
+    historyId: "",
+    historyStartedAt: null,
+    taskStartedAt: null,
+    taskFinishedAt: null,
     error: "",
     errorCode: "",
   },
@@ -35,6 +43,7 @@ export function getTaskState() {
   return {
     ...state.task,
     logs: [...state.task.logs],
+    subTasks: Array.isArray(state.task.subTasks) ? [...state.task.subTasks] : [],
   };
 }
 
@@ -43,6 +52,7 @@ export function setTaskState(nextTask) {
     ...state.task,
     ...nextTask,
     logs: nextTask.logs ? [...nextTask.logs] : state.task.logs,
+    subTasks: nextTask.subTasks ? [...nextTask.subTasks] : state.task.subTasks,
   };
 }
 

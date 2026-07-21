@@ -11,12 +11,54 @@ class ModelListRequest(BaseModel):
 
     base_url: str = Field(..., min_length=1)
     api_key: str = Field(..., min_length=1)
+    provider: str = "openai_compatible_input_audio"
 
 
 class ModelListResponse(BaseModel):
     """Normalized model list response returned to the frontend."""
 
     models: list[str]
+
+
+class BilibiliProfileStatusResponse(BaseModel):
+    """Sanitized local Bilibili profile status."""
+
+    available: bool = False
+    opened: bool = False
+    profile_path_hint: str = "runtime/browser-profile/"
+    message: str = ""
+    session_token: str | None = None
+
+
+class BilibiliProfileCookieExtractRequest(BaseModel):
+    """Request body for extracting simplified cookies from the local profile."""
+
+    session_token: str = Field(..., min_length=16, max_length=256)
+
+
+class BilibiliCookieResponse(BaseModel):
+    """Simplified Bilibili Cookie Header response."""
+
+    cookie_header: str = ""
+    fields: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    message: str = ""
+
+
+class BilibiliCookieValidateRequest(BaseModel):
+    """Request body for validating a simplified Bilibili Cookie Header."""
+
+    cookie_header: str = Field(default="", max_length=64 * 1024)
+
+
+class BilibiliCookieValidateResponse(BaseModel):
+    """Lightweight Bilibili Cookie validation response."""
+
+    valid: bool = False
+    is_logged_in: bool = False
+    fields: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    message: str = ""
 
 
 class ModelConfig(BaseModel):
@@ -27,14 +69,21 @@ class ModelConfig(BaseModel):
     model: str = ""
     temperature: float = 0
     stream: bool = True
+    provider: str = "openai_compatible_input_audio"
 
 
 class TaskOptions(BaseModel):
     """Resource and workflow options for a task."""
 
     skip_subtitle_if_failed: bool = False
-    audio_part_interval_seconds: int = Field(default=10, ge=0, le=120)
-    target_chunk_minutes: int = Field(default=20, ge=1, le=120)
+    bilibili_access_mode: str = "cookie_header"
+    bilibili_cookie_browser: str = "chrome"
+    bilibili_cookie_header: str = Field(default="", max_length=64 * 1024)
+    bilibili_cookies_file_content: str = Field(default="", max_length=1024 * 1024)
+    audio_part_interval_seconds: int = Field(default=20, ge=0, le=120)
+    no_slice_max_minutes: int = Field(default=15, ge=1, le=240)
+    target_chunk_minutes: int = Field(default=15, ge=1, le=120)
+    chunk_overlap_minutes: float = Field(default=0.5, ge=0, le=10)
     max_audio_request_concurrency: int = Field(default=2, ge=1, le=8)
 
 
@@ -47,6 +96,12 @@ class TaskCreateRequest(BaseModel):
     options: TaskOptions = Field(default_factory=TaskOptions)
 
 
+class TranscriptionRetryRequest(BaseModel):
+    """Request body for retrying stage 6 after temporary audio is recreated."""
+
+    transcription_model_config: ModelConfig = Field(default_factory=ModelConfig)
+
+
 class TaskStatus(StrEnum):
     """Task lifecycle states."""
 
@@ -56,6 +111,7 @@ class TaskStatus(StrEnum):
     COMPLETED = "completed"
     CANCELED = "canceled"
     ABANDONED = "abandoned"
+    WAITING_MODEL_RETRY = "waiting_model_retry"
 
 
 class TaskStage(StrEnum):
@@ -99,6 +155,7 @@ class TaskResult(BaseModel):
     clean_subtitle: str = ""
     ai_transcript: str = ""
     filename: str = ""
+    audio_parts: list[dict] = Field(default_factory=list)
     sub_tasks: list[dict] = Field(default_factory=list)
 
 
