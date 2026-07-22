@@ -1,3 +1,6 @@
+import pytest
+
+from backend.app import browser_profile
 from backend.app.bilibili import (
     AccessStrategy,
     BilibiliAccessConfig,
@@ -126,6 +129,51 @@ def test_profile_busy_error_is_specific_and_sanitized():
     assert "占用" in message
     assert "C:\\" not in message
     assert "browser-profile" not in message
+
+
+def test_open_login_window_returns_only_after_worker_confirms_startup(monkeypatch, tmp_path):
+    browser_profile._COOKIE_EXTRACT_TOKENS.clear()
+    browser_profile._COOKIE_EXTRACT_RESULTS.clear()
+    browser_profile._COOKIE_EXTRACT_ERRORS.clear()
+    browser_profile._ACTIVE_LOGIN_SESSIONS.clear()
+    monkeypatch.setattr(browser_profile, "PROFILE_DIR", tmp_path / "profile")
+    monkeypatch.setattr(browser_profile, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(browser_profile, "_ensure_playwright_available", lambda: None)
+
+    def confirm_startup(session_token):
+        browser_profile._ACTIVE_LOGIN_SESSIONS[session_token].startup_ready.set()
+
+    monkeypatch.setattr(browser_profile, "_run_login_window", confirm_startup)
+    payload = browser_profile.open_login_window()
+
+    try:
+        assert payload["opened"] is True
+        assert payload["session_token"] in browser_profile._ACTIVE_LOGIN_SESSIONS
+    finally:
+        browser_profile.consume_cookie_extract_session(payload["session_token"])
+
+
+def test_open_login_window_surfaces_worker_startup_error(monkeypatch, tmp_path):
+    browser_profile._COOKIE_EXTRACT_TOKENS.clear()
+    browser_profile._COOKIE_EXTRACT_RESULTS.clear()
+    browser_profile._COOKIE_EXTRACT_ERRORS.clear()
+    browser_profile._ACTIVE_LOGIN_SESSIONS.clear()
+    monkeypatch.setattr(browser_profile, "PROFILE_DIR", tmp_path / "profile")
+    monkeypatch.setattr(browser_profile, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(browser_profile, "_ensure_playwright_available", lambda: None)
+
+    def fail_startup(session_token):
+        session = browser_profile._ACTIVE_LOGIN_SESSIONS[session_token]
+        session.error = "模拟 Chromium 启动失败"
+        session.startup_ready.set()
+
+    monkeypatch.setattr(browser_profile, "_run_login_window", fail_startup)
+
+    with pytest.raises(RuntimeError, match="模拟 Chromium 启动失败"):
+        browser_profile.open_login_window()
+
+    assert not browser_profile._ACTIVE_LOGIN_SESSIONS
+    assert not browser_profile._COOKIE_EXTRACT_TOKENS
 
 
 def test_login_window_cookie_result_is_read_from_memory_by_token():

@@ -5,6 +5,7 @@ $ProjectRoot = (Get-Location).Path
 $RuntimeDir = Join-Path $ProjectRoot "runtime"
 $DownloadsDir = Join-Path $RuntimeDir "downloads"
 $ToolsDir = Join-Path $RuntimeDir "tools"
+$BrowserCacheDir = Join-Path $RuntimeDir "browser-cache"
 $DataDir = Join-Path $ProjectRoot "data"
 $LogsDir = Join-Path $ProjectRoot "logs"
 $TempDir = Join-Path $DataDir "temp"
@@ -13,12 +14,10 @@ $DependencyStamp = Join-Path $RuntimeDir ".dependencies-installed"
 $RequirementsFile = Join-Path $ProjectRoot "backend\requirements.txt"
 $PythonInstaller = Join-Path $DownloadsDir "python-3.12.8-amd64.exe"
 $PythonInstallDir = Join-Path $ToolsDir "python-3.12"
-$FfmpegZip = Join-Path $DownloadsDir "ffmpeg-release-essentials.zip"
 $FfmpegDir = Join-Path $ToolsDir "ffmpeg"
-$OfficialWindowsPythonUrl = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
 $WindowsPythonUrl = if ($env:VIDEO2TEXT_PYTHON_URL) { $env:VIDEO2TEXT_PYTHON_URL } else { "https://mirrors.tuna.tsinghua.edu.cn/python/3.12.8/python-3.12.8-amd64.exe" }
-$WindowsFfmpegUrl = if ($env:VIDEO2TEXT_FFMPEG_URL) { $env:VIDEO2TEXT_FFMPEG_URL } else { "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" }
 $DefaultPipIndexUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"
+$DefaultPlaywrightDownloadHost = "https://npmmirror.com/mirrors/playwright"
 
 function Write-Step($Message) {
   Write-Host "[INFO] $Message"
@@ -52,7 +51,17 @@ function Use-DomesticInstallDefaults {
     Write-Step "Using user configured PyPI index: $env:PIP_INDEX_URL"
   }
 
-  if ($env:PLAYWRIGHT_DOWNLOAD_HOST) {
+  if (-not $env:PLAYWRIGHT_BROWSERS_PATH) {
+    $env:PLAYWRIGHT_BROWSERS_PATH = $BrowserCacheDir
+    Write-Step "Using project Playwright browser cache: $BrowserCacheDir"
+  } else {
+    Write-Step "Using user configured Playwright browser cache: $env:PLAYWRIGHT_BROWSERS_PATH"
+  }
+
+  if (-not $env:PLAYWRIGHT_DOWNLOAD_HOST) {
+    $env:PLAYWRIGHT_DOWNLOAD_HOST = $DefaultPlaywrightDownloadHost
+    Write-Step "Using default Playwright mirror for mainland direct network: $DefaultPlaywrightDownloadHost"
+  } else {
     Write-Step "Using user configured Playwright browser mirror: $env:PLAYWRIGHT_DOWNLOAD_HOST"
   }
 }
@@ -98,26 +107,14 @@ function Ensure-EmbeddedPython {
   Ensure-Directory $DownloadsDir
   Ensure-Directory $PythonInstallDir
   if (-not (Test-Path $PythonInstaller)) {
-    $PythonUrls = @($WindowsPythonUrl)
-    if ($WindowsPythonUrl -ne $OfficialWindowsPythonUrl) {
-      $PythonUrls += $OfficialWindowsPythonUrl
-    }
-    $Downloaded = $false
-    foreach ($Url in $PythonUrls) {
-      try {
-        Write-Step "Downloading Python from: $Url"
-        Invoke-WebRequest -Uri $Url -OutFile $PythonInstaller
-        $Downloaded = $true
-        break
-      } catch {
-        Write-Step "Python download failed from $($Url): $($_.Exception.Message)"
-        if (Test-Path $PythonInstaller) {
-          Remove-Item -LiteralPath $PythonInstaller -Force -ErrorAction SilentlyContinue
-        }
+    try {
+      Write-Step "Downloading Python from domestic mirror: $WindowsPythonUrl"
+      Invoke-WebRequest -Uri $WindowsPythonUrl -OutFile $PythonInstaller
+    } catch {
+      if (Test-Path $PythonInstaller) {
+        Remove-Item -LiteralPath $PythonInstaller -Force -ErrorAction SilentlyContinue
       }
-    }
-    if (-not $Downloaded) {
-      throw "Python installer could not be downloaded from configured sources."
+      throw "Python installer could not be downloaded from the configured domestic mirror: $WindowsPythonUrl"
     }
   } else {
     Write-Step "Reusing downloaded Python installer: $PythonInstaller"
@@ -144,7 +141,7 @@ function Get-PythonCommand {
     Write-Step "Using local Python runtime: $PythonExe"
     return "`"$PythonExe`""
   } catch {
-    Write-Fail "Unable to prepare Python automatically." "Install Python 3.12 from https://www.python.org/downloads/ and run start-windows.bat again."
+    Write-Fail "Unable to prepare Python automatically." "Check access to the configured domestic Python mirror, or install Python 3.12 manually, then run start-windows.bat again."
     throw
   }
 }
@@ -167,36 +164,19 @@ function Ensure-Ffmpeg($VenvPython) {
     return
   }
 
-  try {
-    Write-DownloadNotice "FFmpeg" $WindowsFfmpegUrl $FfmpegZip
-    Ensure-Directory $DownloadsDir
-    Ensure-Directory $FfmpegDir
-    if (-not (Test-Path $FfmpegZip)) {
-      Invoke-WebRequest -Uri $WindowsFfmpegUrl -OutFile $FfmpegZip
-    } else {
-      Write-Step "Reusing downloaded FFmpeg archive: $FfmpegZip"
-    }
-    Expand-Archive -Path $FfmpegZip -DestinationPath $FfmpegDir -Force
-    $LocalFfmpeg = Get-ChildItem -Path $FfmpegDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1
-    if (-not $LocalFfmpeg) {
-      throw "ffmpeg.exe was not found after extraction."
-    }
-    $env:PATH = "$($LocalFfmpeg.DirectoryName);$env:PATH"
-    Write-Step "Using local FFmpeg: $($LocalFfmpeg.FullName)"
-  } catch {
-    Write-Fail "Unable to prepare FFmpeg automatically." "Install FFmpeg manually or check your network, then run start-windows.bat again."
-    throw
-  }
+  Write-Fail "Unable to prepare FFmpeg automatically." "Check access to the configured PyPI domestic mirror, or install FFmpeg manually, then run start-windows.bat again."
+  throw "imageio-ffmpeg could not provide a usable FFmpeg executable."
 }
 
 function Use-ImageioFfmpeg($VenvPython) {
   try {
     Write-Step "Preparing FFmpeg from imageio-ffmpeg via PyPI mirror."
-    & $VenvPython -m pip install imageio-ffmpeg
+    & $VenvPython -m pip install "imageio-ffmpeg>=0.5.1,<1.0.0"
     if ($LASTEXITCODE -ne 0) {
       throw "imageio-ffmpeg installation failed."
     }
-    $ImageioFfmpeg = (& $VenvPython -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" 2>$null | Select-Object -First 1).Trim()
+    $EncodedImageioFfmpeg = (& $VenvPython -c "import base64, imageio_ffmpeg; print(base64.b64encode(imageio_ffmpeg.get_ffmpeg_exe().encode('utf-8')).decode('ascii'))" 2>$null | Select-Object -First 1).Trim()
+    $ImageioFfmpeg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($EncodedImageioFfmpeg))
     if ($ImageioFfmpeg -and (Test-Path $ImageioFfmpeg)) {
       $ImageioDir = Split-Path -Parent $ImageioFfmpeg
       $env:PATH = "$ImageioDir;$env:PATH"
@@ -219,6 +199,15 @@ function Ensure-Venv($PythonCommand) {
   return $VenvPython
 }
 
+function Test-BackendDependencies($VenvPython) {
+  try {
+    & $VenvPython -c "import fastapi, uvicorn, yt_dlp, httpx, curl_cffi, playwright.sync_api, imageio_ffmpeg" 2>$null
+    return $LASTEXITCODE -eq 0
+  } catch {
+    return $false
+  }
+}
+
 function Install-Dependencies($VenvPython) {
   $RequirementsStamp = ""
   if (Test-Path $RequirementsFile) {
@@ -229,15 +218,50 @@ function Install-Dependencies($VenvPython) {
     $CurrentStamp = Get-Content $DependencyStamp -Raw
   }
 
-  if ($CurrentStamp.Trim() -eq $RequirementsStamp -and $RequirementsStamp) {
+  if ($CurrentStamp.Trim() -eq $RequirementsStamp -and $RequirementsStamp -and (Test-BackendDependencies $VenvPython)) {
     Write-Step "Backend dependencies are already installed; skipping pip install."
     return
   }
 
   Write-Step "Installing backend dependencies. First launch or dependency changes may download packages."
   & $VenvPython -m pip install --upgrade pip
+  if ($LASTEXITCODE -ne 0) {
+    throw "pip upgrade failed."
+  }
   & $VenvPython -m pip install -r $RequirementsFile
+  if ($LASTEXITCODE -ne 0) {
+    throw "Backend dependency installation failed."
+  }
   Set-Content -Path $DependencyStamp -Value $RequirementsStamp
+}
+
+function Test-PlaywrightChromiumAvailable($VenvPython) {
+  try {
+    & $VenvPython -c "from pathlib import Path; from playwright.sync_api import sync_playwright; p = sync_playwright().start(); executable = p.chromium.executable_path; p.stop(); raise SystemExit(0 if Path(executable).is_file() else 1)" 2>$null
+    return $LASTEXITCODE -eq 0
+  } catch {
+    return $false
+  }
+}
+
+function Ensure-PlaywrightChromium($VenvPython) {
+  Write-Step "Checking Playwright Chromium."
+  if (Test-PlaywrightChromiumAvailable $VenvPython) {
+    Write-Step "Using Playwright Chromium from: $env:PLAYWRIGHT_BROWSERS_PATH"
+    return
+  }
+
+  $DownloadSource = $env:PLAYWRIGHT_DOWNLOAD_HOST
+  Write-DownloadNotice "Playwright Chromium" $DownloadSource $env:PLAYWRIGHT_BROWSERS_PATH
+  & $VenvPython -m playwright install chromium
+  if ($LASTEXITCODE -ne 0) {
+    throw "Playwright Chromium installation failed."
+  }
+
+  if (-not (Test-PlaywrightChromiumAvailable $VenvPython)) {
+    throw "Playwright Chromium installation finished but the browser executable was not found."
+  }
+  Write-Step "Playwright Chromium is ready in: $env:PLAYWRIGHT_BROWSERS_PATH"
 }
 
 function Test-PortAvailable($Port) {
@@ -296,6 +320,7 @@ try {
   $PythonCommand = Get-PythonCommand
   $VenvPython = Ensure-Venv $PythonCommand
   Install-Dependencies $VenvPython
+  Ensure-PlaywrightChromium $VenvPython
   Ensure-Ffmpeg $VenvPython
 
   $Port = Get-AvailablePort

@@ -6,6 +6,7 @@ PROJECT_ROOT="$(pwd)"
 RUNTIME_DIR="$PROJECT_ROOT/runtime"
 DOWNLOADS_DIR="$RUNTIME_DIR/downloads"
 TOOLS_DIR="$RUNTIME_DIR/tools"
+BROWSER_CACHE_DIR="$RUNTIME_DIR/browser-cache"
 DATA_DIR="$PROJECT_ROOT/data"
 LOGS_DIR="$PROJECT_ROOT/logs"
 TEMP_DIR_PATH="$DATA_DIR/temp"
@@ -13,10 +14,9 @@ VENV_DIR="$RUNTIME_DIR/.venv"
 DEPENDENCY_STAMP="$RUNTIME_DIR/.dependencies-installed"
 REQUIREMENTS_FILE="$PROJECT_ROOT/backend/requirements.txt"
 PYTHON_PKG="$DOWNLOADS_DIR/python-3.12.8-macos11.pkg"
-FFMPEG_ZIP="$DOWNLOADS_DIR/ffmpeg-macos-latest.zip"
-PYTHON_URL="${VIDEO2TEXT_PYTHON_URL:-https://www.python.org/ftp/python/3.12.8/python-3.12.8-macos11.pkg}"
-FFMPEG_URL="${VIDEO2TEXT_FFMPEG_URL:-https://evermeet.cx/ffmpeg/getrelease/zip}"
+PYTHON_URL="${VIDEO2TEXT_PYTHON_URL:-https://mirrors.tuna.tsinghua.edu.cn/python/3.12.8/python-3.12.8-macos11.pkg}"
 DEFAULT_PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"
 
 info() {
   printf '[INFO] %s\n' "$1"
@@ -51,7 +51,17 @@ use_domestic_install_defaults() {
     info "Using user configured PyPI index: $PIP_INDEX_URL"
   fi
 
-  if [ -n "${PLAYWRIGHT_DOWNLOAD_HOST:-}" ]; then
+  if [ -z "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+    export PLAYWRIGHT_BROWSERS_PATH="$BROWSER_CACHE_DIR"
+    info "Using project Playwright browser cache: $BROWSER_CACHE_DIR"
+  else
+    info "Using user configured Playwright browser cache: $PLAYWRIGHT_BROWSERS_PATH"
+  fi
+
+  if [ -z "${PLAYWRIGHT_DOWNLOAD_HOST:-}" ]; then
+    export PLAYWRIGHT_DOWNLOAD_HOST="$DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST"
+    info "Using default Playwright mirror for mainland direct network: $DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST"
+  else
     info "Using user configured Playwright browser mirror: $PLAYWRIGHT_DOWNLOAD_HOST"
   fi
 }
@@ -75,15 +85,19 @@ get_python() {
 
   download_notice "Python 3.12" "$PYTHON_URL" "$PYTHON_PKG" >&2
   if ! command -v curl >/dev/null 2>&1; then
-    fail "curl is not available, so Python cannot be downloaded automatically." "Install Python 3.12 from https://www.python.org/downloads/ and run start-mac.command again."
+    fail "curl is not available, so Python cannot be downloaded automatically." "Install Python 3.12 manually and run start-mac.command again."
     return 1
   fi
   if [ ! -f "$PYTHON_PKG" ]; then
-    curl -L "$PYTHON_URL" -o "$PYTHON_PKG"
+    if ! curl --fail --location --retry 2 "$PYTHON_URL" -o "$PYTHON_PKG"; then
+      rm -f "$PYTHON_PKG"
+      fail "Python download failed from the configured domestic mirror." "Check network access to the Qinghua Python mirror, then run start-mac.command again."
+      return 1
+    fi
   else
     info "Reusing downloaded Python installer: $PYTHON_PKG" >&2
   fi
-  info "Opening the official Python installer. Complete the installer, then this script will continue." >&2
+  info "Opening the Python installer downloaded from the domestic mirror. Complete the installer, then this script will continue." >&2
   open "$PYTHON_PKG"
   read -r -p "Press Enter after the Python installer finishes... " _
 
@@ -100,6 +114,7 @@ get_python() {
 }
 
 ensure_ffmpeg() {
+  local venv_python="$1"
   info "Checking FFmpeg."
   if command -v ffmpeg >/dev/null 2>&1; then
     info "Using system FFmpeg."
@@ -115,27 +130,19 @@ ensure_ffmpeg() {
     return 0
   fi
 
-  if ! command -v curl >/dev/null 2>&1 || ! command -v unzip >/dev/null 2>&1; then
-    fail "FFmpeg is missing and curl/unzip is not available." "Install FFmpeg manually, then run start-mac.command again."
-    return 1
+  info "Preparing FFmpeg from imageio-ffmpeg via the configured PyPI mirror."
+  if "$venv_python" -m pip install 'imageio-ffmpeg>=0.5.1,<1.0.0'; then
+    local_ffmpeg="$("$venv_python" -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())' 2>/dev/null || true)"
+  fi
+  if [ -n "$local_ffmpeg" ] && [ -f "$local_ffmpeg" ]; then
+    chmod +x "$local_ffmpeg" 2>/dev/null || true
+    export PATH="$(dirname "$local_ffmpeg"):$PATH"
+    info "Using imageio-ffmpeg binary: $local_ffmpeg"
+    return 0
   fi
 
-  download_notice "FFmpeg" "$FFMPEG_URL" "$FFMPEG_ZIP"
-  mkdir -p "$TOOLS_DIR/ffmpeg"
-  if [ ! -f "$FFMPEG_ZIP" ]; then
-    curl -L "$FFMPEG_URL" -o "$FFMPEG_ZIP"
-  else
-    info "Reusing downloaded FFmpeg archive: $FFMPEG_ZIP"
-  fi
-  unzip -o "$FFMPEG_ZIP" -d "$TOOLS_DIR/ffmpeg" >/dev/null
-  local_ffmpeg="$(find "$TOOLS_DIR/ffmpeg" -type f -name ffmpeg | head -n 1 || true)"
-  if [ -z "$local_ffmpeg" ]; then
-    fail "ffmpeg was not found after extraction." "Install FFmpeg manually from a trusted source, then run start-mac.command again."
-    return 1
-  fi
-  chmod +x "$local_ffmpeg"
-  export PATH="$(dirname "$local_ffmpeg"):$PATH"
-  info "Using local FFmpeg: $local_ffmpeg"
+  fail "Unable to prepare FFmpeg automatically." "Check access to the configured PyPI domestic mirror, or install FFmpeg manually, then run start-mac.command again."
+  return 1
 }
 
 ensure_venv() {
@@ -145,6 +152,10 @@ ensure_venv() {
     "$python_cmd" -m venv "$VENV_DIR"
   fi
   printf '%s\n' "$VENV_DIR/bin/python"
+}
+
+backend_dependencies_available() {
+  "$1" -c 'import fastapi, uvicorn, yt_dlp, httpx, curl_cffi, playwright.sync_api, imageio_ffmpeg' >/dev/null 2>&1
 }
 
 install_dependencies() {
@@ -164,7 +175,7 @@ PY
     current_stamp="$(cat "$DEPENDENCY_STAMP")"
   fi
 
-  if [ "$current_stamp" = "$requirements_stamp" ] && [ -n "$requirements_stamp" ]; then
+  if [ "$current_stamp" = "$requirements_stamp" ] && [ -n "$requirements_stamp" ] && backend_dependencies_available "$venv_python"; then
     info "Backend dependencies are already installed; skipping pip install."
     return 0
   fi
@@ -173,6 +184,38 @@ PY
   "$venv_python" -m pip install --upgrade pip
   "$venv_python" -m pip install -r "$REQUIREMENTS_FILE"
   printf '%s' "$requirements_stamp" > "$DEPENDENCY_STAMP"
+}
+
+playwright_chromium_executable() {
+  local venv_python="$1"
+  "$venv_python" - <<'PY'
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as playwright:
+    print(playwright.chromium.executable_path)
+PY
+}
+
+ensure_playwright_chromium() {
+  local venv_python="$1"
+  local executable=""
+  info "Checking Playwright Chromium."
+  executable="$(playwright_chromium_executable "$venv_python" 2>/dev/null || true)"
+  if [ -n "$executable" ] && [ -x "$executable" ]; then
+    info "Using Playwright Chromium: $executable"
+    return 0
+  fi
+
+  local download_source="$PLAYWRIGHT_DOWNLOAD_HOST"
+  download_notice "Playwright Chromium" "$download_source" "$PLAYWRIGHT_BROWSERS_PATH"
+  "$venv_python" -m playwright install chromium
+
+  executable="$(playwright_chromium_executable "$venv_python" 2>/dev/null || true)"
+  if [ -z "$executable" ] || [ ! -x "$executable" ]; then
+    fail "Playwright Chromium installation finished but the browser executable was not found." "Check network access or PLAYWRIGHT_DOWNLOAD_HOST, then run start-mac.command again."
+    return 1
+  fi
+  info "Playwright Chromium is ready: $executable"
 }
 
 port_available() {
@@ -228,9 +271,10 @@ main() {
   ensure_dirs
   use_domestic_install_defaults
   PYTHON_CMD="$(get_python)"
-  ensure_ffmpeg
   VENV_PYTHON="$(ensure_venv "$PYTHON_CMD")"
   install_dependencies "$VENV_PYTHON"
+  ensure_playwright_chromium "$VENV_PYTHON"
+  ensure_ffmpeg "$VENV_PYTHON"
   PYTHON_FOR_PORT="$VENV_PYTHON"
   PORT="$(get_available_port)"
   URL="http://127.0.0.1:$PORT"

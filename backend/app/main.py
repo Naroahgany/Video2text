@@ -121,7 +121,7 @@ async def retry_transcription(task_id: str, request: TranscriptionRetryRequest) 
 @app.post("/api/bilibili/profile/open-login", response_model=BilibiliProfileStatusResponse)
 async def open_bilibili_profile_login() -> BilibiliProfileStatusResponse:
     try:
-        payload = open_login_window()
+        payload = await asyncio.to_thread(open_login_window)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return BilibiliProfileStatusResponse(available=True, **payload)

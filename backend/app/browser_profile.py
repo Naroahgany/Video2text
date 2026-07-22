@@ -33,6 +33,7 @@ BILIBILI_COOKIE_URLS = [
 COOKIE_EXTRACT_TOKEN_TTL_SECONDS = 20 * 60
 PROFILE_READ_RETRY_ATTEMPTS = 12
 PROFILE_READ_RETRY_DELAY_SECONDS = 0.5
+LOGIN_WINDOW_START_TIMEOUT_SECONDS = 40
 _COOKIE_EXTRACT_TOKENS: dict[str, float] = {}
 _COOKIE_EXTRACT_RESULTS: dict[str, dict[str, Any]] = {}
 _COOKIE_EXTRACT_ERRORS: dict[str, str] = {}
@@ -41,6 +42,8 @@ _ACTIVE_LOGIN_SESSIONS: dict[str, "_LoginWindowSession"] = {}
 
 class _LoginWindowSession:
     def __init__(self) -> None:
+        self.startup_ready = threading.Event()
+        self.stop_requested = threading.Event()
         self.extract_requested = threading.Event()
         self.result_ready = threading.Event()
         self.result: dict[str, Any] | None = None
@@ -95,8 +98,6 @@ def open_login_window() -> dict[str, Any]:
     """Open a dedicated local Bilibili login window in a background thread."""
 
     _ensure_playwright_available()
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     _cleanup_cookie_extract_sessions()
     for active_token in list(_ACTIVE_LOGIN_SESSIONS):
         if validate_cookie_extract_session(active_token):
@@ -114,7 +115,24 @@ def open_login_window() -> dict[str, Any]:
     session = _LoginWindowSession()
     _ACTIVE_LOGIN_SESSIONS[session_token] = session
     thread = threading.Thread(target=_run_login_window, args=(session_token,), daemon=True)
-    thread.start()
+    try:
+        thread.start()
+    except Exception as exc:
+        consume_cookie_extract_session(session_token)
+        raise RuntimeError(_login_window_error_message(exc)) from exc
+
+    if not session.startup_ready.wait(timeout=LOGIN_WINDOW_START_TIMEOUT_SECONDS):
+        session.stop_requested.set()
+        consume_cookie_extract_session(session_token)
+        raise RuntimeError(
+            "B站登录窗口启动超时，请检查网络或安全软件后重试；"
+            "如果仍失败，请重新运行项目启动脚本修复 Playwright Chromium。"
+        )
+    if session.error:
+        error = session.error
+        consume_cookie_extract_session(session_token)
+        raise RuntimeError(error)
+
     return {
         "opened": True,
         "profile_path_hint": profile_relative_path(),
@@ -384,16 +402,16 @@ def _with_profile_context(callback: Any) -> Any:
 
 
 def _run_login_window(session_token: str | None = None) -> None:
-    _ensure_playwright_available()
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    from playwright.sync_api import Error as PlaywrightError
-    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-    from playwright.sync_api import sync_playwright
     session = _ACTIVE_LOGIN_SESSIONS.get(str(session_token or ""))
 
     try:
+        _ensure_playwright_available()
+        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+
         with sync_playwright() as playwright:
             context = playwright.chromium.launch_persistent_context(
                 str(PROFILE_DIR),
@@ -402,7 +420,11 @@ def _run_login_window(session_token: str | None = None) -> None:
             )
             page = context.pages[0] if context.pages else context.new_page()
             try:
-                page.goto(BILIBILI_HOME_URL, wait_until="domcontentloaded")
+                page.goto(BILIBILI_HOME_URL, wait_until="domcontentloaded", timeout=30000)
+                if session and session.stop_requested.is_set():
+                    return
+                if session:
+                    session.startup_ready.set()
                 while True:
                     if session and session.extract_requested.is_set():
                         session.extract_requested.clear()
@@ -421,18 +443,20 @@ def _run_login_window(session_token: str | None = None) -> None:
             finally:
                 try:
                     context.close()
-                except PlaywrightError as exc:
+                except Exception as exc:
                     token = str(session_token or "")
                     if token:
-                        _COOKIE_EXTRACT_ERRORS[token] = _playwright_error_message(exc)
-    except PlaywrightError as exc:
+                        _COOKIE_EXTRACT_ERRORS[token] = _login_window_error_message(exc)
+    except Exception as exc:
         token = str(session_token or "")
         if token:
-            _COOKIE_EXTRACT_ERRORS[token] = _playwright_error_message(exc)
+            _COOKIE_EXTRACT_ERRORS[token] = _login_window_error_message(exc)
             if session:
                 session.error = _COOKIE_EXTRACT_ERRORS[token]
                 session.result_ready.set()
     finally:
+        if session:
+            session.startup_ready.set()
         if str(session_token or "") in _COOKIE_EXTRACT_RESULTS or str(session_token or "") in _COOKIE_EXTRACT_ERRORS:
             _ACTIVE_LOGIN_SESSIONS.pop(str(session_token or ""), None)
 
@@ -447,10 +471,18 @@ def _ensure_playwright_available() -> None:
 def _playwright_error_message(exc: Exception) -> str:
     message = str(exc).lower()
     if "executable doesn't exist" in message or "playwright install" in message:
-        return "Playwright 浏览器组件尚未安装，请在本机运行 `python -m playwright install chromium` 后重试。"
+        return "Playwright Chromium 缺失或损坏，请关闭本地服务后重新运行项目启动脚本，程序会自动下载并修复。"
     if _is_profile_busy_error(exc):
         return "本地专用浏览器 Profile 仍被登录窗口或 Chromium 后台进程占用，请等待几秒后重试；如果仍失败，请确认本工具打开的 B站登录窗口都已关闭。"
     return f"本地专用浏览器 Profile 读取失败：{_safe_playwright_error_detail(exc)}"
+
+
+def _login_window_error_message(exc: Exception) -> str:
+    message = _playwright_error_message(exc)
+    prefix = "本地专用浏览器 Profile 读取失败："
+    if message.startswith(prefix):
+        return f"本地专用 B站登录窗口启动失败：{message.removeprefix(prefix)}"
+    return message
 
 
 def _safe_playwright_error_detail(exc: Exception) -> str:

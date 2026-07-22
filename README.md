@@ -33,10 +33,11 @@
 2. 检测 FFmpeg。
 3. 创建或复用 `runtime/.venv` 虚拟环境。
 4. 安装 `backend/requirements.txt` 中的后端依赖。
-5. 检测 `8000` 端口；如果被占用，自动在 `8000-8099` 中选择可用端口。
-6. 启动 FastAPI 服务，并打开默认浏览器访问本地页面。
+5. 检查并自动安装当前 Playwright 版本所需的 Chromium 到 `runtime/browser-cache/`。
+6. 检测 `8000` 端口；如果被占用，自动在 `8000-8099` 中选择可用端口。
+7. 启动 FastAPI 服务，并打开默认浏览器访问本地页面。
 
-启动脚本默认按国内直连网络准备 Python 包依赖：Python 包安装默认使用清华 PyPI 镜像。如需改用其他源，可在启动前设置 `PIP_INDEX_URL`、`VIDEO2TEXT_PYTHON_URL` 或 `VIDEO2TEXT_FFMPEG_URL`。Playwright Chromium 不再作为启动必经下载项；只有打开本地 B站登录窗口时才需要浏览器运行时，如果届时提示缺少浏览器组件，再按提示安装或设置已验证可用的 `PLAYWRIGHT_DOWNLOAD_HOST`。
+首次运行会自动获取的内容均已配置为中国大陆网络可直连的默认源：Windows 和 macOS 的 Python 3.12.8 安装包来自清华 Python 镜像，Python 依赖及 `imageio-ffmpeg` 来自清华 PyPI 镜像，Playwright 1.61.0 对应的 Chromium 来自 npmmirror。默认流程无需连接 VPN，也不会在国内镜像失败后自动转向境外下载地址。如需使用自定义内网镜像，可在启动前设置 `PIP_INDEX_URL`、`VIDEO2TEXT_PYTHON_URL` 或 `PLAYWRIGHT_DOWNLOAD_HOST`。首次运行以及删除 `runtime/` 后再次运行时，脚本会自动下载 Playwright Chromium；后续启动检测到对应版本的浏览器文件后会直接复用。可以通过 `PLAYWRIGHT_BROWSERS_PATH` 自定义浏览器缓存目录，未设置时默认使用项目内的 `runtime/browser-cache/`。
 
 推荐打开地址：
 
@@ -62,9 +63,9 @@ http://127.0.0.1:8000/api/health
 Windows 脚本策略：
 
 - 如果本机已有可用 Python 3，则直接复用，不强制安装固定小版本。
-- 如果没有 Python，会优先从清华 Python 镜像下载 `Python 3.12.8` Windows amd64 安装包，失败后再尝试官方地址。
-- 如果没有 FFmpeg，会优先通过清华 PyPI 镜像安装 `imageio-ffmpeg` 并使用其中的 `ffmpeg.exe`；如果该路径失败，才尝试旧的 FFmpeg zip 下载兜底。
-- Python 依赖默认从清华 PyPI 镜像安装；Playwright Chromium 不在启动时强制下载，避免浏览器镜像不可用时阻塞主服务。
+- 如果没有 Python，会从清华 Python 镜像下载 `Python 3.12.8` Windows amd64 安装包；下载失败时明确报错并停止，不会静默切换到境外地址。
+- 如果没有 FFmpeg，会通过清华 PyPI 镜像安装 `imageio-ffmpeg` 并使用其中的 `ffmpeg.exe`，不再依赖境外 FFmpeg zip。
+- Python 依赖默认从清华 PyPI 镜像安装；启动脚本会检查并自动从 npmmirror 补装 Playwright Chromium，浏览器准备失败时会明确报错并停止启动。
 - 如果自动下载失败，请按控制台提示手动安装 Python 或 FFmpeg 后重新双击脚本。
 
 ## Mac 本地启动
@@ -83,9 +84,9 @@ chmod +x start-mac.command scripts/start-local.sh
 Mac 脚本策略：
 
 - 如果本机已有可用 Python 3，则直接复用，不强制安装固定小版本。
-- 如果没有 Python，会尝试从 Python 官方下载地址下载 `Python 3.12.8` macOS universal2 安装包，并打开官方安装器；安装完成后按回车继续。
-- 如果没有 FFmpeg，会尝试下载 macOS FFmpeg zip 并解压到 `runtime/tools/ffmpeg`。
-- Python 依赖默认从清华 PyPI 镜像安装；Playwright Chromium 不在启动时强制下载，避免浏览器镜像不可用时阻塞主服务。
+- 如果没有 Python，会从清华 Python 镜像下载 `Python 3.12.8` macOS universal2 安装包并打开安装器；安装完成后按回车继续。
+- 如果没有 FFmpeg，会通过清华 PyPI 镜像安装 `imageio-ffmpeg` 并使用其中的 FFmpeg 可执行文件，不再依赖境外 FFmpeg zip。
+- Python 依赖默认从清华 PyPI 镜像安装；启动脚本会检查并自动从 npmmirror 补装 Playwright Chromium，浏览器准备失败时会明确报错并停止启动。
 - 如果自动下载失败，请按控制台提示手动安装 Python 或 FFmpeg 后重新双击脚本。
 
 ## GitHub 上传 / 打包注意
@@ -143,10 +144,11 @@ python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ## 常见错误排查
 
 - `FFmpeg 不可用`：启动脚本会优先复用系统 FFmpeg，检测不到时会通过清华 PyPI 镜像安装 `imageio-ffmpeg` 提供的 `ffmpeg.exe`；如果仍失败，请手动安装 FFmpeg 后重新运行脚本。
+- `Playwright Chromium 安装失败`：默认下载源是 npmmirror；检查网络或自定义的 `PLAYWRIGHT_DOWNLOAD_HOST`，重新运行启动脚本时会再次检测并补装，不需要手动编辑源码。
 - `端口被占用`：启动脚本会自动从 `8000-8099` 选择可用端口，并打开正确 URL。
 - `前端健康检查失败`：确认启动脚本控制台窗口仍在运行，并访问 `/api/health`。
 - `依赖安装失败`：检查 Python 版本、网络连接和 `runtime/.venv` 虚拟环境；必要时删除 `runtime/.venv` 后重试。
-- `Python 下载失败`：检查网络是否可以访问 `python.org`，或手动安装 Python 3.12 后重新运行脚本。
+- `Python 下载失败`：检查网络是否可以访问清华 Python 镜像，或手动安装 Python 3.12 后重新运行脚本。
 - `Mac 无法双击运行`：先执行 `chmod +x start-mac.command scripts/start-local.sh`，或在“系统设置”里允许打开该脚本。
 - `用户输入无法解析`：请确认输入中包含 B站视频链接、b23.tv 短链或 BV 号。
 - `没有检测到字幕`：该视频可能没有 UP 主字幕或自动字幕；页面会提示是否跳过字幕，继续使用 AI 音频转写稿生成最终文稿。
