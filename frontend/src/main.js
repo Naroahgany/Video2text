@@ -1,6 +1,7 @@
 import {
   cancelTask,
   createTask,
+  createLocalMediaTask,
   extractBilibiliCookieFromProfile,
   fetchHealth,
   fetchModelList,
@@ -47,6 +48,7 @@ const elements = {
   refreshButton: document.querySelector("[data-refresh-health]"),
   workflowShell: document.querySelector("[data-workflow-shell]"),
   videoTitle: document.querySelector("[data-video-title]"),
+  sourceLabel: document.querySelector("[data-source-label]"),
   videoPartTitle: document.querySelector("[data-video-part-title]"),
   taskView: document.querySelector("[data-task-view]"),
   resultView: document.querySelector("[data-result-view]"),
@@ -54,6 +56,8 @@ const elements = {
   taskInput: document.querySelector("[data-task-input]"),
   inputStatus: document.querySelector("[data-input-status]"),
   sendButton: document.querySelector(".send-button"),
+  uploadButton: document.querySelector("[data-upload-button]"),
+  localMediaInput: document.querySelector("[data-local-media-input]"),
   progressBar: document.querySelector("[data-progress-bar]"),
   progressLabel: document.querySelector("[data-progress-label]"),
   stageText: document.querySelector("[data-stage-text]"),
@@ -634,6 +638,7 @@ function renderTask() {
   const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
   const logText = task.logs.length ? task.logs.map(formatLog).join("\n") : "暂无日志";
   const canCancel = ["pending", "running", "waiting_model_retry"].includes(task.status);
+  const isLocalUpload = task.sourceType === "local_upload";
   const hasFinalMarkdown = Boolean(task.finalMarkdown);
   const hasCleanSubtitle = Boolean(task.cleanSubtitle);
   const hasAiTranscript = Boolean(task.aiTranscript);
@@ -641,9 +646,11 @@ function renderTask() {
   const elapsedText = task.taskStartedAt ? formatElapsedDuration(taskElapsedMilliseconds(task)) : "";
   const displayTitle = readableTitle(
     task.videoTitle,
-    workflowState === "idle" ? "等待视频标题" : "正在获取视频标题",
+    isLocalUpload
+      ? workflowState === "idle" ? "等待本地文件" : "正在读取本地文件"
+      : workflowState === "idle" ? "等待视频标题" : "正在获取视频标题",
   );
-  const displayPartTitle = currentPartHeading(task);
+  const displayPartTitle = isLocalUpload ? "" : currentPartHeading(task);
   const fallbackError =
     task.status === "canceled"
       ? "任务已取消，可以返回输入态或直接重新提交。"
@@ -655,6 +662,9 @@ function renderTask() {
 
   renderWorkflowState(task);
   elements.videoTitle.textContent = displayTitle;
+  if (elements.sourceLabel) {
+    elements.sourceLabel.textContent = isLocalUpload ? "当前文件" : "当前视频";
+  }
   if (elements.videoPartTitle) {
     elements.videoPartTitle.textContent = displayPartTitle;
     elements.videoPartTitle.hidden = !displayPartTitle;
@@ -681,6 +691,7 @@ function renderTask() {
   elements.cancelTask.disabled = !task.taskId || !canCancel;
   elements.taskInput.disabled = workflowState !== "idle";
   elements.sendButton.disabled = workflowState !== "idle" || canCancel;
+  elements.uploadButton.disabled = workflowState !== "idle" || canCancel;
   collapseIntermediatePanelForNewResult(task);
   renderMarkdownPreview(elements.finalMarkdown, task.finalMarkdown);
   elements.downloadMarkdown.disabled = !hasFinalMarkdown;
@@ -824,7 +835,9 @@ async function ensureBilibiliCredentialReady() {
     elements.bilibiliCookieHeader?.value || settings.cookieHeader || "",
   );
   if (!cookieHeader) {
-    showCredentialGuide("未检测到精简 B站 Cookie，请先打开本地 B站登录窗口完成凭据初始化。");
+    showCredentialGuide(
+      "未检测到精简 B站 Cookie，请先完成登录初始化；如需处理本地文件，可关闭此窗口后点击 + 上传。",
+    );
     return;
   }
 
@@ -867,6 +880,7 @@ function applyTaskResponse(payload) {
     stage: payload.stage || "未知阶段",
     currentItem: payload.current_item || "",
     logs: Array.isArray(payload.logs) ? payload.logs : [],
+    sourceType: result.source_type || currentTask.sourceType || "bilibili",
     originalInput: currentTask.originalInput || lastTaskInput,
     recognizedInput: result.parsed_input || result.webpage_url || currentTask.recognizedInput,
     finalMarkdown: result.final_markdown || "",
@@ -987,6 +1001,7 @@ async function persistCurrentTaskToHistory() {
     id: task.historyId || task.taskId || `local-${task.taskStartedAt || Date.now()}`,
     status: task.status,
     title: historyTitleForTask(task),
+    sourceType: task.sourceType || "bilibili",
     pIndex: task.pIndex ?? null,
     durationSeconds: taskElapsedSeconds(task),
     originalInput: task.originalInput || lastTaskInput || elements.taskInput.value.trim(),
@@ -1566,14 +1581,20 @@ function localTimestampForFilename() {
 }
 
 function buildMarkdownDownloadFilename(task) {
+  const title = sanitizeFilenamePart(task.videoTitle || "音视频转文字");
+  if (task.sourceType === "local_upload") {
+    return `${title}_${localTimestampForFilename()}.md`;
+  }
   const pLabel = `P${task.pIndex || 1}`;
-  const title = sanitizeFilenamePart(task.videoTitle || "B站视频转文字");
   return `${pLabel}_${title}_${localTimestampForFilename()}.md`;
 }
 
 function buildTextDownloadFilename(task, suffix) {
+  const title = sanitizeFilenamePart(task.videoTitle || "音视频转文字");
+  if (task.sourceType === "local_upload") {
+    return `${title}_${localTimestampForFilename()}_${suffix}.txt`;
+  }
   const pLabel = `P${task.pIndex || 1}`;
-  const title = sanitizeFilenamePart(task.videoTitle || "B站视频转文字");
   return `${pLabel}_${title}_${localTimestampForFilename()}_${suffix}.txt`;
 }
 
@@ -1598,6 +1619,7 @@ function restoreHistoryRecord(record) {
     progress: status === "completed" ? 100 : 0,
     stage: "历史任务详情",
     currentItem: "",
+    sourceType: record.sourceType || "bilibili",
     originalInput: record.originalInput || "",
     recognizedInput: record.parsedInput || "",
     videoTitle: record.title || "历史任务",
@@ -1644,6 +1666,7 @@ async function resetWorkflow() {
   lastTaskInput = "";
   lastCollapsedIntermediateResultKey = "";
   setTaskState({
+    sourceType: "bilibili",
     taskId: "",
     status: "idle",
     progress: 0,
@@ -1668,6 +1691,9 @@ async function resetWorkflow() {
   });
   elements.taskInput.value = "";
   elements.inputStatus.textContent = "";
+  if (elements.localMediaInput) {
+    elements.localMediaInput.value = "";
+  }
   renderTask();
   updateInputStatus();
   elements.taskInput.focus({ preventScroll: true });
@@ -1699,6 +1725,11 @@ async function submitTask({
     return;
   }
 
+  if (!bilibiliCredentialReady) {
+    showCredentialGuide("处理 B站链接前需要本机 B站登录态；如需处理本地文件，可关闭此窗口后点击 + 上传。");
+    return;
+  }
+
   stopPolling();
   taskGeneration += 1;
   const currentGeneration = taskGeneration;
@@ -1708,6 +1739,7 @@ async function submitTask({
   lastCollapsedIntermediateResultKey = "";
   const taskStartedAt = Date.now();
   setTaskState({
+    sourceType: "bilibili",
     taskId: "",
     status: "pending",
     progress: 0,
@@ -1771,6 +1803,129 @@ async function submitTask({
     });
     log("error", error instanceof Error ? error.message : "创建任务失败");
     persistCurrentTaskToHistory().catch(() => {});
+  }
+}
+
+function localMediaDisplayTitle(filename) {
+  const name = String(filename || "").trim();
+  return name.replace(/\.[^.]+$/, "") || name || "本地音视频";
+}
+
+function isSupportedLocalMediaFile(file) {
+  const acceptedExtensions = new Set(
+    String(elements.localMediaInput?.accept || "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => item.startsWith(".")),
+  );
+  const suffixMatch = String(file?.name || "").toLowerCase().match(/\.[^.]+$/);
+  const suffix = suffixMatch ? suffixMatch[0] : "";
+  const mediaType = String(file?.type || "").toLowerCase();
+  return acceptedExtensions.has(suffix) || mediaType.startsWith("audio/") || mediaType.startsWith("video/");
+}
+
+async function submitLocalMediaTask(file) {
+  const currentTask = getTaskState();
+  if (!file || ["pending", "running"].includes(currentTask.status)) {
+    return;
+  }
+  if (!isSupportedLocalMediaFile(file)) {
+    const message = "不支持该文件格式，请选择常见的视频或音频文件。";
+    elements.inputStatus.textContent = message;
+    return;
+  }
+
+  stopPolling();
+  taskGeneration += 1;
+  const currentGeneration = taskGeneration;
+  hideSubtitleFailureModal();
+  hideTranscriptionRetryModal();
+  lastTaskInput = file.name;
+  lastCollapsedIntermediateResultKey = "";
+  const taskStartedAt = Date.now();
+  const displayTitle = localMediaDisplayTitle(file.name);
+  setTaskState({
+    sourceType: "local_upload",
+    taskId: "",
+    status: "pending",
+    progress: 0,
+    stage: "正在上传本地文件",
+    currentItem: file.name,
+    originalInput: file.name,
+    recognizedInput: `本地上传：${file.name}`,
+    videoTitle: displayTitle,
+    logs: [],
+    finalMarkdown: "",
+    cleanSubtitle: "",
+    aiTranscript: "",
+    filename: "final.md",
+    pIndex: null,
+    subTasks: [],
+    historyId: "",
+    historyStartedAt: taskStartedAt,
+    taskStartedAt,
+    taskFinishedAt: null,
+    error: "",
+    errorCode: "",
+  });
+  elements.inputStatus.textContent = "";
+  renderTask();
+  log("info", `已选择本地文件：${file.name}`);
+
+  try {
+    const configs = await getAllModelConfigs();
+    const payload = await createLocalMediaTask({
+      file,
+      transcriptionConfig: configs.transcription,
+      refineConfig: configs.refine,
+      onUploadProgress: (fraction) => {
+        if (currentGeneration !== taskGeneration) {
+          return;
+        }
+        const percent = Math.round(fraction * 100);
+        setTaskState({
+          progress: Math.min(8, Math.round(fraction * 8)),
+          currentItem: `${file.name}（已上传 ${percent}%）`,
+        });
+        renderTask();
+      },
+    });
+    if (currentGeneration !== taskGeneration) {
+      return;
+    }
+    applyTaskResponse(payload);
+    if (!terminalTaskStatuses.has(payload.status)) {
+      startPolling(payload.task_id, currentGeneration);
+    }
+  } catch (error) {
+    if (currentGeneration !== taskGeneration) {
+      return;
+    }
+    setTaskState({
+      status: "failed",
+      progress: 0,
+      stage: "本地文件任务创建失败",
+      currentItem: "",
+      taskFinishedAt: Date.now(),
+      error: error instanceof Error ? error.message : "本地文件上传失败",
+      errorCode: "",
+    });
+    log("error", error instanceof Error ? error.message : "本地文件上传失败");
+    persistCurrentTaskToHistory().catch(() => {});
+  }
+}
+
+function handleUploadButtonClick() {
+  if (getWorkflowState(getTaskState()) === "idle") {
+    elements.localMediaInput?.click();
+  }
+}
+
+async function handleLocalMediaSelection(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (file) {
+    await submitLocalMediaTask(file);
   }
 }
 
@@ -1902,6 +2057,8 @@ function bindEvents() {
   elements.refreshButton.addEventListener("click", refreshHealth);
   elements.taskInput.addEventListener("input", updateInputStatus);
   elements.inputForm.addEventListener("submit", handleStartTask);
+  elements.uploadButton?.addEventListener("click", handleUploadButtonClick);
+  elements.localMediaInput?.addEventListener("change", handleLocalMediaSelection);
   elements.cancelTask.addEventListener("click", handleCancelTask);
   elements.skipSubtitleButton.addEventListener("click", handleSkipSubtitle);
   elements.dismissSubtitleButtons.forEach((button) =>

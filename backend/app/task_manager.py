@@ -56,6 +56,12 @@ from .models import (
     TaskStatusResponse,
     TranscriptionRetryRequest,
 )
+from .local_media import (
+    classify_local_media,
+    sanitize_local_media_filename,
+    store_local_media_upload,
+)
+from .prompts import LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER
 from .subtitle import SubtitleProcessingError, clean_subtitle
 from .utils import redact_secrets, utc_now_iso
 
@@ -89,6 +95,10 @@ class TaskRecord:
     transcription_model_config: ModelConfig
     refine_model_config: ModelConfig
     secret_values: list[str]
+    source_type: str = "bilibili"
+    local_media_kind: str = ""
+    local_media_filename: str = ""
+    local_media_path: Path | None = None
     status: TaskStatus = TaskStatus.PENDING
     stage: TaskStage = TaskStage.PARSE_INPUT
     progress: int = 0
@@ -160,6 +170,74 @@ class TaskManager:
         record.worker_task = asyncio.create_task(self._run_task(task_id))
         return self._to_response(record)
 
+    async def create_local_media_task(self, request: TaskCreateRequest, upload) -> TaskStatusResponse:
+        """Store a local media upload and start it in the shared transcription workflow."""
+
+        await self.sweep_abandoned_tasks()
+        media_kind = classify_local_media(upload.filename or "", upload.content_type or "")
+        safe_filename = sanitize_local_media_filename(upload.filename or "", media_kind)
+        task_id = str(uuid.uuid4())
+        options = request.options
+        options.max_audio_request_concurrency = min(
+            options.max_audio_request_concurrency,
+            self.audio_request_concurrency,
+        )
+
+        temp_dir = self._temp_dirs.create(task_id)
+        upload_path = temp_dir / "local-upload" / safe_filename
+        try:
+            bytes_written = await store_local_media_upload(upload, upload_path)
+        except BaseException:
+            self._temp_dirs.cleanup(task_id)
+            raise
+
+        title = Path(safe_filename).stem or safe_filename
+        record = TaskRecord(
+            task_id=task_id,
+            original_input=safe_filename,
+            options=options,
+            transcription_model_config=request.transcription_model_config,
+            refine_model_config=request.refine_model_config,
+            secret_values=[
+                request.transcription_model_config.api_key,
+                request.refine_model_config.api_key,
+            ],
+            source_type="local_upload",
+            local_media_kind=media_kind,
+            local_media_filename=safe_filename,
+            local_media_path=upload_path,
+            stage=TaskStage.READ_LOCAL_MEDIA,
+            progress=8,
+            temp_dir=temp_dir,
+            result=TaskResult(
+                source_type="local_upload",
+                title=title,
+                parsed_input=f"本地上传：{safe_filename}",
+                subtitle_source="local_upload_placeholder",
+                clean_subtitle=LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
+                ai_transcript="本地文件已上传，等待转换 MP3 与音频转文字。",
+            ),
+        )
+        kind_label = {"video": "视频", "audio": "音频"}.get(media_kind, "音视频")
+        self._add_log(
+            record,
+            "info",
+            f"本地{kind_label}文件上传完成：{safe_filename}（{bytes_written} 字节）",
+        )
+        self._add_log(record, "info", "本地上传任务将跳过 B站信息与字幕提取，直接转换 MP3、切片和转写")
+        self._add_log(record, "info", f"全局重任务并发上限：{self.global_concurrency}")
+        self._add_log(
+            record,
+            "info",
+            f"OpenAI-compatible 音频片段并发上限：{options.max_audio_request_concurrency}",
+        )
+
+        async with self._lock:
+            self._tasks[task_id] = record
+
+        record.worker_task = asyncio.create_task(self._run_task(task_id))
+        return self._to_response(record)
+
     async def get_task(self, task_id: str) -> TaskStatusResponse:
         async with self._lock:
             record = self._get_record_locked(task_id)
@@ -205,8 +283,16 @@ class TaskManager:
             record.cancel_event = asyncio.Event()
             record.status = TaskStatus.RUNNING
             record.stage = TaskStage.TRANSCRIBE_AUDIO
-            record.current_item = "等待重新准备音频并重试阶段 6"
-            self._add_log(record, "info", "用户已请求重新尝试阶段 6；此前临时音频已清理，本次将重新下载并切片")
+            if record.source_type == "local_upload":
+                record.current_item = "使用已上传的本地文件重试阶段 6"
+                self._add_log(record, "info", "用户已请求重新尝试阶段 6；将复用暂存的本地 MP3 切片")
+            else:
+                record.current_item = "等待重新准备音频并重试阶段 6"
+                self._add_log(
+                    record,
+                    "info",
+                    "用户已请求重新尝试阶段 6；此前临时音频已清理，本次将重新下载并切片",
+                )
             record.worker_task = asyncio.create_task(self._resume_stage6_task(task_id))
             return self._to_response(record)
 
@@ -283,10 +369,14 @@ class TaskManager:
             async with self._global_semaphore:
                 await self._raise_if_cancelled(record)
                 record.status = TaskStatus.RUNNING
-                record.temp_dir = self._temp_dirs.create(record.task_id)
-                self._add_log(record, "info", "已创建任务独立临时目录")
+                if not record.temp_dir:
+                    record.temp_dir = self._temp_dirs.create(record.task_id)
+                    self._add_log(record, "info", "已创建任务独立临时目录")
 
-                await self._run_stage4_workflow(record)
+                if record.source_type == "local_upload":
+                    await self._run_local_media_workflow(record)
+                else:
+                    await self._run_stage4_workflow(record)
                 await self._run_stage6_workflow(record)
                 await self._run_stage7_workflow(record)
 
@@ -353,6 +443,11 @@ class TaskManager:
         try:
             async with self._global_semaphore:
                 if not record.temp_dir or not record.audio_parts:
+                    if record.source_type == "local_upload":
+                        raise AudioProcessingError(
+                            "local_upload_retry_missing",
+                            "本地上传文件的临时音频已不存在，请取消当前任务后重新上传文件。",
+                        )
                     record.temp_dir = self._temp_dirs.create(record.task_id)
                     self._add_log(record, "info", "阶段 6 重试前重新准备任务临时目录和音频")
                     await self._run_stage4_workflow(record)
@@ -413,6 +508,83 @@ class TaskManager:
             if record.status in TERMINAL_STATUSES:
                 self._cleanup_record(record)
                 self._clear_secrets(record)
+
+    async def _run_local_media_workflow(self, record: TaskRecord) -> None:
+        """Convert and split a local upload without entering any Bilibili subtitle stage."""
+
+        await self._raise_if_cancelled(record)
+        record.stage = TaskStage.READ_LOCAL_MEDIA
+        record.progress = max(record.progress, 8)
+        record.current_item = f"校验本地文件：{record.local_media_filename}"
+        self._add_log(record, "info", "开始读取本地上传文件并校验临时文件状态")
+
+        input_path = record.local_media_path
+        if (
+            not input_path
+            or not record.temp_dir
+            or not input_path.is_file()
+            or input_path.stat().st_size <= 0
+        ):
+            raise AudioProcessingError(
+                "local_upload_missing",
+                "本地上传文件不存在或内容为空，请重新上传音频或视频文件。",
+            )
+
+        await self._raise_if_cancelled(record)
+        record.stage = TaskStage.CONVERT_MP3
+        record.progress = 12
+        kind_label = {"video": "视频", "audio": "音频"}.get(record.local_media_kind, "音视频")
+        record.current_item = f"将本地{kind_label}转换为 MP3"
+        self._add_log(record, "info", f"开始使用 FFmpeg 将本地{kind_label}统一转换为 MP3")
+        mp3_path = record.temp_dir / "stage5" / "converted" / "source.mp3"
+        try:
+            mp3_duration = await convert_audio_to_mp3(input_path, mp3_path)
+        except AudioProcessingError as exc:
+            if exc.code == "audio_stream_missing":
+                raise AudioProcessingError(
+                    "local_upload_audio_stream_missing",
+                    "FFmpeg 已成功读取文件，但其中没有可用的音频轨，无法进行转文字处理。请检查上传的文件是否包含音频轨。",
+                ) from exc
+            raise
+        self._add_log(record, "info", f"本地文件已转换为 MP3，校验时长 {self._format_duration(mp3_duration)}")
+
+        await self._raise_if_cancelled(record)
+        record.stage = TaskStage.SPLIT_AUDIO
+        record.progress = 17
+        record.current_item = "本地音频切片"
+        self._add_log(
+            record,
+            "info",
+            (
+                "开始按统一规则处理本地音频切片："
+                f"不切片阈值={record.options.no_slice_max_minutes}分钟，"
+                f"切片周期={record.options.target_chunk_minutes}分钟，"
+                f"重合={record.options.chunk_overlap_minutes}分钟"
+            ),
+        )
+        audio_parts = await split_mp3_by_rule(
+            mp3_path,
+            record.temp_dir / "stage5" / "parts",
+            mp3_duration,
+            no_slice_max_minutes=record.options.no_slice_max_minutes,
+            target_chunk_minutes=record.options.target_chunk_minutes,
+            chunk_overlap_minutes=record.options.chunk_overlap_minutes,
+        )
+        self._log_audio_parts(record, audio_parts)
+        record.audio_parts = audio_parts
+        record.progress = 20
+        record.current_item = None
+        record.result = self._build_local_stage5_result(
+            filename=record.local_media_filename,
+            media_kind=record.local_media_kind,
+            mp3_duration_seconds=mp3_duration,
+            audio_parts=[part.to_public_dict() for part in audio_parts],
+        )
+        self._add_log(
+            record,
+            "info",
+            "本地文件 MP3 转换与切片完成；已跳过 B站字幕提取，准备进入 AI 音频转文字",
+        )
 
     async def _run_stage4_workflow(self, record: TaskRecord) -> None:
         await self._raise_if_cancelled(record)
@@ -719,7 +891,14 @@ class TaskManager:
         record.stage = TaskStage.REFINE_MARKDOWN
         record.progress = 75
         record.current_item = "第二模型文稿优化"
-        self._add_log(record, "info", "开始阶段 7：调用第二模型合并字幕与 AI 音频转文字稿")
+        if record.source_type == "local_upload":
+            self._add_log(
+                record,
+                "info",
+                "开始阶段 7：使用本地文件无原生字幕占位说明与 AI 音频转文字稿调用第二模型",
+            )
+        else:
+            self._add_log(record, "info", "开始阶段 7：调用第二模型合并字幕与 AI 音频转文字稿")
         self._add_log(
             record,
             "info",
@@ -880,11 +1059,20 @@ class TaskManager:
 
     def _build_stage6_markdown(self, result: TaskResult, audio_parts: list[AudioPart]) -> str:
         audio_summary = "未切片，单段 MP3 已转写" if len(audio_parts) == 1 else f"{len(audio_parts)} 段 MP3 已按顺序转写并合并"
+        if result.source_type == "local_upload":
+            source_lines = (
+                f"- 本地文件：{result.title}\n"
+                "- 字幕状态：本地上传文件没有原生字幕\n"
+            )
+        else:
+            source_lines = (
+                f"- 视频标题：{result.title}\n"
+                f"- BV 号：{result.bv_id or '未知'}\n"
+                f"- 当前分P：P{result.p_index}\n"
+            )
         return (
             "### 阶段 6 结果\n\n"
-            f"- 视频标题：{result.title}\n"
-            f"- BV 号：{result.bv_id or '未知'}\n"
-            f"- 当前分P：P{result.p_index}\n"
+            f"{source_lines}"
             f"- 音频转写状态：{audio_summary}\n\n"
             "#### AI 音频转文字稿\n\n"
             f"{result.ai_transcript}\n\n"
@@ -892,9 +1080,11 @@ class TaskManager:
         )
 
     def _build_markdown_filename(self, result: TaskResult) -> str:
-        p_label = f"P{result.p_index}" if result.p_index else "P1"
-        title = self._sanitize_filename_part(result.title or "B站视频转文字")
+        title = self._sanitize_filename_part(result.title or "音视频转文字")
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        if result.source_type == "local_upload":
+            return f"{title}_{timestamp}.md"
+        p_label = f"P{result.p_index}" if result.p_index else "P1"
         return f"{p_label}_{title}_{timestamp}.md"
 
     def _sanitize_filename_part(self, value: str) -> str:
@@ -913,8 +1103,15 @@ class TaskManager:
             "error",
             f"阶段 6 暂停：{record.error}。可在前端选择重试、重新配置第一模型后重试，或取消任务。",
         )
-        self._cleanup_record(record)
-        self._add_log(record, "info", "阶段 6 暂停后已清理全部临时音频；重试时会重新下载")
+        if record.source_type == "local_upload":
+            self._add_log(
+                record,
+                "info",
+                "阶段 6 暂停后暂存本地文件与 MP3 切片，以便用户直接重试；取消或超时后会自动清理",
+            )
+        else:
+            self._cleanup_record(record)
+            self._add_log(record, "info", "阶段 6 暂停后已清理全部临时音频；重试时会重新下载")
 
     async def _sleep_or_cancel(self, record: TaskRecord, delay_seconds: float) -> None:
         try:
@@ -1191,6 +1388,51 @@ class TaskManager:
             webpage_url=video_info.webpage_url,
             duration_seconds=video_info.duration_seconds,
             sub_tasks=[self._part_to_dict(part) for part in video_info.parts],
+        )
+
+    def _build_local_stage5_result(
+        self,
+        filename: str,
+        media_kind: str,
+        mp3_duration_seconds: float,
+        audio_parts: list[dict[str, object]],
+    ) -> TaskResult:
+        kind_label = {"video": "视频", "audio": "音频"}.get(media_kind, "音视频")
+        title = Path(filename).stem or filename
+        audio_summary = "未切片，登记为单段 MP3" if len(audio_parts) == 1 else f"已切为 {len(audio_parts)} 段 MP3"
+        part_lines = "\n".join(
+            (
+                f"- {part.get('filename')}: "
+                f"{self._format_duration(part.get('startSeconds'))}-"
+                f"{self._format_duration(part.get('endSeconds'))}，"
+                f"时长 {self._format_duration(part.get('durationSeconds'))}，"
+                f"重合 {self._format_duration(part.get('overlapSeconds'))}"
+            )
+            for part in audio_parts
+        )
+        final_markdown = (
+            "### 本地文件预处理结果\n\n"
+            f"- 文件名：{filename}\n"
+            f"- 文件类型：本地{kind_label}\n"
+            f"- MP3 校验时长：{self._format_duration(mp3_duration_seconds)}\n"
+            "- 字幕状态：本地上传文件没有原生字幕，已跳过字幕提取\n"
+            f"- 音频状态：{audio_summary}\n\n"
+            "#### 音频片段\n\n"
+            f"{part_lines or '- 暂无片段'}\n\n"
+            "本轮已完成本地文件读取、FFmpeg MP3 转换和切片文件准备。"
+            "后续将直接使用 AI 音频转文字稿进行文稿优化。"
+        )
+        return TaskResult(
+            source_type="local_upload",
+            title=title,
+            parsed_input=f"本地上传：{filename}",
+            duration_seconds=mp3_duration_seconds,
+            subtitle_source="local_upload_placeholder",
+            final_markdown=final_markdown,
+            clean_subtitle=LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
+            ai_transcript="本地文件已准备为 MP3 或 MP3 切片，等待 AI 音频转文字。",
+            filename="local-media-audio-processing-result.md",
+            audio_parts=audio_parts,
         )
 
     def _build_stage5_result(

@@ -118,6 +118,7 @@ class TaskStage(StrEnum):
     """Workflow stages shown to the frontend."""
 
     PARSE_INPUT = "解析用户输入"
+    READ_LOCAL_MEDIA = "读取本地音视频文件"
     FETCH_VIDEO_INFO = "获取视频信息"
     FETCH_SUBTITLE = "获取 B站字幕"
     CLEAN_SUBTITLE = "清理 B站字幕"
@@ -143,6 +144,7 @@ class TaskLogEntry(BaseModel):
 class TaskResult(BaseModel):
     """Task result structure used by later workflow stages."""
 
+    source_type: Literal["bilibili", "local_upload"] = "bilibili"
     title: str = ""
     bv_id: str = ""
     p_index: int | None = None

@@ -4,6 +4,7 @@ const state = {
     message: "正在检查...",
   },
   task: {
+    sourceType: "bilibili",
     taskId: "",
     status: "idle",
     progress: 0,

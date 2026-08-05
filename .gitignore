@@ -3,6 +3,7 @@
 # 仅供本地开发使用的计划、代理规则和参考资料
 docs/
 AGENTS.md
+Agent.md
 
 # 环境变量与本机密钥
 .env

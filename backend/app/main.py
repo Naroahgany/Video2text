@@ -5,11 +5,13 @@ from urllib.parse import urlparse
 import ipaddress
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
+from .local_media import LocalMediaValidationError
 from .bilibili_cookie import validate_bilibili_cookie_header
 from .browser_profile import (
     consume_cookie_extract_session,
@@ -92,6 +94,30 @@ async def health_check() -> dict[str, str]:
 @app.post("/api/tasks", response_model=TaskStatusResponse)
 async def create_task(request: TaskCreateRequest) -> TaskStatusResponse:
     return await task_manager.create_task(request)
+
+
+@app.post("/api/tasks/local-upload", response_model=TaskStatusResponse)
+async def create_local_upload_task(
+    task_request: str = Form(...),
+    file: UploadFile = File(...),
+) -> TaskStatusResponse:
+    try:
+        request = TaskCreateRequest.model_validate_json(task_request)
+    except ValidationError as exc:
+        await file.close()
+        raise HTTPException(status_code=422, detail="本地上传任务参数无效") from exc
+
+    try:
+        return await task_manager.create_local_media_task(request, file)
+    except LocalMediaValidationError as exc:
+        await file.close()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        await file.close()
+        raise HTTPException(
+            status_code=500,
+            detail="保存本地上传文件失败，请检查临时目录空间和写入权限。",
+        ) from exc
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse)

@@ -216,6 +216,8 @@ async def convert_audio_to_mp3(
         "-y",
         "-i",
         str(input_path),
+        "-map",
+        "0:a:0",
         "-vn",
         "-codec:a",
         "libmp3lame",
@@ -516,6 +518,16 @@ def _audio_suffix(stream: PlayurlAudioStream) -> str:
 
 def _require_binary(name: str, code: str, message: str) -> str:
     executable = shutil.which(name)
+    if not executable and name == "ffmpeg":
+        try:
+            import imageio_ffmpeg
+
+            bundled_ffmpeg = Path(imageio_ffmpeg.get_ffmpeg_exe())
+        except (ImportError, OSError, RuntimeError):
+            bundled_ffmpeg = None
+        if bundled_ffmpeg and bundled_ffmpeg.is_file():
+            executable = str(bundled_ffmpeg)
+
     if not executable:
         raise AudioProcessingError(code, message)
     return executable
@@ -530,8 +542,14 @@ def _run_subprocess(command: list[str], timeout: int, code: str, message: str) -
         raise AudioProcessingError(code, f"{message}：{_sanitize_external_message(exc)}") from exc
 
     if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        detail = _sanitize_external_message(detail)
+        raw_detail = (completed.stderr or completed.stdout or "").strip()
+        lowered_detail = raw_detail.lower()
+        if code == "mp3_conversion_failed" and any(
+            marker in lowered_detail
+            for marker in ("output file does not contain any stream", "matches no streams")
+        ):
+            raise AudioProcessingError("audio_stream_missing", "输入文件中未检测到可用的音频轨，无法转换为 MP3。")
+        detail = _sanitize_external_message(raw_detail)
         raise AudioProcessingError(code, f"{message}：{detail or 'FFmpeg 返回非 0 状态。'}")
     return completed.stdout or ""
 

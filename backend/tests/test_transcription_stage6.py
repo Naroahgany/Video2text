@@ -30,6 +30,7 @@ from backend.app.llm_client import (
 from backend.app.models import ModelConfig, TaskOptions
 from backend.app.prompts import (
     REFINE_FINISH_INSTRUCTION,
+    LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
     REFINE_FINISH_MARKER,
     NO_SUBTITLE_PLACEHOLDER,
     REFINE_TRANSCRIPT_TASK_PROMPT,
@@ -155,6 +156,16 @@ def test_refine_prompt_reuses_existing_four_segment_structure():
     assert "<AIAudioTranscriptionResult>\nAI 音频转写正文\n</AIAudioTranscriptionResult>" in prompt
     assert prompt.endswith(REFINE_FINISH_INSTRUCTION)
     assert REFINE_FINISH_MARKER in prompt
+
+
+def test_refine_prompt_keeps_unified_subtitle_block_for_local_uploads():
+    prompt = build_refine_transcript_prompt(
+        LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
+        "本地文件的 AI 音频转写正文",
+    )
+
+    assert f"<OriginalSubtitleContent>\n{LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER}\n</OriginalSubtitleContent>" in prompt
+    assert "<AIAudioTranscriptionResult>\n本地文件的 AI 音频转写正文\n</AIAudioTranscriptionResult>" in prompt
 
 
 def test_refine_continuation_prompt_includes_truncation_anchor_after_finish_instruction():

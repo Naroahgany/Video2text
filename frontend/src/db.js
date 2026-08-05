@@ -259,6 +259,7 @@ function sanitizeSubTask(subTask = {}) {
 function sanitizeHistoryRecord(record = {}) {
   const status = HISTORY_STATUSES.has(record.status) ? record.status : record.error ? "failed" : "completed";
   return {
+    sourceType: record.sourceType === "local_upload" ? "local_upload" : "bilibili",
     id: record.id || crypto.randomUUID(),
     status,
     title: redactSensitiveText(record.title || "未命名任务"),

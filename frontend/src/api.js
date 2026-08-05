@@ -50,26 +50,57 @@ export async function createTask({ input, transcriptionConfig, refineConfig, opt
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      input,
-      transcription_model_config: toBackendModelConfig(transcriptionConfig),
-      refine_model_config: toBackendModelConfig(refineConfig),
-      options: {
-        skip_subtitle_if_failed: Boolean(options.skipSubtitleIfFailed),
-        bilibili_access_mode: options.bilibiliAccessMode || "cookie_header",
-        bilibili_cookie_browser: options.bilibiliCookieBrowser || "chrome",
-        bilibili_cookie_header: options.bilibiliCookieHeader || "",
-        bilibili_cookies_file_content: options.bilibiliCookiesFileContent || "",
-        audio_part_interval_seconds: Number(options.audioPartIntervalSeconds ?? 20),
-        no_slice_max_minutes: Number(options.noSliceMaxMinutes ?? 15),
-        target_chunk_minutes: Number(options.targetChunkMinutes ?? 15),
-        chunk_overlap_minutes: Number(options.chunkOverlapMinutes ?? 0.5),
-        max_audio_request_concurrency: Number(options.maxAudioRequestConcurrency ?? 2),
-      },
-    }),
+    body: JSON.stringify(toBackendTaskRequest(input, transcriptionConfig, refineConfig, options)),
   });
 
   return parseTaskResponse(response, "Task create request failed");
+}
+
+export function createLocalMediaTask({
+  file,
+  transcriptionConfig,
+  refineConfig,
+  options = {},
+  onUploadProgress,
+}) {
+  const formData = new FormData();
+  formData.append(
+    "task_request",
+    JSON.stringify(toBackendTaskRequest(file.name, transcriptionConfig, refineConfig, options)),
+  );
+  formData.append("file", file, file.name);
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", apiUrl("/api/tasks/local-upload"));
+    request.setRequestHeader("Accept", "application/json");
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable || typeof onUploadProgress !== "function") {
+        return;
+      }
+      onUploadProgress(Math.max(0, Math.min(1, event.loaded / event.total)));
+    });
+    request.addEventListener("load", () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(request.responseText || "{}");
+      } catch {
+        payload = {};
+      }
+      if (request.status >= 200 && request.status < 300) {
+        resolve(payload);
+        return;
+      }
+      reject(new Error(payload.detail || `Local media upload failed: ${request.status}`));
+    });
+    request.addEventListener("error", () => {
+      reject(new Error("本地文件上传失败，请确认后端服务仍在运行。"));
+    });
+    request.addEventListener("abort", () => {
+      reject(new Error("本地文件上传已取消。"));
+    });
+    request.send(formData);
+  });
 }
 
 export async function fetchTask(taskId) {
@@ -157,6 +188,26 @@ export async function validateBilibiliCookie(cookieHeader) {
   });
 
   return parseJsonResponse(response, "Bilibili cookie validation request failed");
+}
+
+function toBackendTaskRequest(input, transcriptionConfig, refineConfig, options = {}) {
+  return {
+    input,
+    transcription_model_config: toBackendModelConfig(transcriptionConfig),
+    refine_model_config: toBackendModelConfig(refineConfig),
+    options: {
+      skip_subtitle_if_failed: Boolean(options.skipSubtitleIfFailed),
+      bilibili_access_mode: options.bilibiliAccessMode || "cookie_header",
+      bilibili_cookie_browser: options.bilibiliCookieBrowser || "chrome",
+      bilibili_cookie_header: options.bilibiliCookieHeader || "",
+      bilibili_cookies_file_content: options.bilibiliCookiesFileContent || "",
+      audio_part_interval_seconds: Number(options.audioPartIntervalSeconds ?? 20),
+      no_slice_max_minutes: Number(options.noSliceMaxMinutes ?? 15),
+      target_chunk_minutes: Number(options.targetChunkMinutes ?? 15),
+      chunk_overlap_minutes: Number(options.chunkOverlapMinutes ?? 0.5),
+      max_audio_request_concurrency: Number(options.maxAudioRequestConcurrency ?? 2),
+    },
+  };
 }
 
 function toBackendModelConfig(config = {}) {

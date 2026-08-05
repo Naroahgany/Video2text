@@ -8,6 +8,9 @@ AUDIO_TRANSCRIPTION_PROMPT = (
 )
 
 NO_SUBTITLE_PLACEHOLDER = "该视频没有自带字幕，请根据 AI 音频转文字的结果进行优化。"
+LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER = (
+    "该音频为本地上传文件，没有原生字幕，请按照AI音频转文字所生成的文稿进行优化"
+)
 REFINE_FINISH_MARKER = "[finish]"
 REFINE_FINISH_INSTRUCTION = (
     "**必须在完全输出的最后，空一行，然后加上[finish]的字样，表示你已经全部输出完毕了！**"
@@ -191,6 +194,7 @@ def build_refine_transcript_prompt(
 
 __all__ = [
     "AUDIO_TRANSCRIPTION_PROMPT",
+    "LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER",
     "NO_SUBTITLE_PLACEHOLDER",
     "REFINE_FINISH_INSTRUCTION",
     "REFINE_FINISH_MARKER",
