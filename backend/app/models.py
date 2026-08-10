@@ -102,6 +102,12 @@ class TranscriptionRetryRequest(BaseModel):
     transcription_model_config: ModelConfig = Field(default_factory=ModelConfig)
 
 
+class RefineRetryRequest(BaseModel):
+    """Request body for retrying stage 7 with preserved transcription results."""
+
+    refine_model_config: ModelConfig = Field(default_factory=ModelConfig)
+
+
 class TaskStatus(StrEnum):
     """Task lifecycle states."""
 

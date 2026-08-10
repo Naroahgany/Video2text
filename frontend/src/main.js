@@ -7,6 +7,7 @@ import {
   fetchModelList,
   fetchTask,
   openBilibiliLoginWindow,
+  retryRefine,
   retryTranscription,
 } from "./api.js";
 import {
@@ -64,8 +65,10 @@ const elements = {
   taskElapsed: document.querySelector("[data-task-elapsed]"),
   resultDuration: document.querySelector("[data-result-duration]"),
   errorMessage: document.querySelector("[data-error-message]"),
+  errorSuggestion: document.querySelector("[data-error-suggestion]"),
   logPanel: document.querySelector("[data-log-panel]"),
   cancelTask: document.querySelector("[data-cancel-task]"),
+  retryModel: document.querySelector("[data-retry-model]"),
   resetWorkflowButtons: Array.from(document.querySelectorAll("[data-reset-workflow]")),
   finalMarkdown: document.querySelector("[data-final-markdown]"),
   cleanSubtitle: document.querySelector("[data-clean-subtitle]"),
@@ -259,8 +262,7 @@ function getWorkflowState(task) {
   return "running";
 }
 
-function renderWorkflowState(task) {
-  const workflowState = getWorkflowState(task);
+function applyWorkflowState(workflowState) {
   elements.appShell.classList.remove(...workflowStateClasses);
   elements.appShell.classList.add(`app-state-${workflowState}`);
   elements.workflowShell.dataset.workflowState = workflowState;
@@ -269,6 +271,38 @@ function renderWorkflowState(task) {
     workflowState === "idle" || workflowState === "completed" ? "true" : "false",
   );
   elements.resultView.setAttribute("aria-hidden", workflowState === "completed" ? "false" : "true");
+}
+
+function renderWorkflowState(task) {
+  applyWorkflowState(getWorkflowState(task));
+}
+
+function waitForWorkflowCollapse() {
+  return new Promise((resolve) => {
+    let settled = false;
+    let fallbackTimer = null;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      elements.workflowShell.removeEventListener("transitionend", handleTransitionEnd);
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer);
+      }
+      resolve();
+    };
+
+    const handleTransitionEnd = (event) => {
+      if (event.target === elements.workflowShell && event.propertyName === "padding-top") {
+        finish();
+      }
+    };
+
+    elements.workflowShell.addEventListener("transitionend", handleTransitionEnd);
+    fallbackTimer = window.setTimeout(finish, 450);
+  });
 }
 
 function redactSecrets(value) {
@@ -632,12 +666,39 @@ function formatLog(log) {
   return `[${localTime(log.time)}] ${log.level.toUpperCase()} ${log.message}`;
 }
 
+function retryableModelKind(task) {
+  if (task.status !== "waiting_model_retry") {
+    return "";
+  }
+
+  const errorCode = String(task.errorCode || "");
+  if (errorCode.startsWith("transcription_") || task.stage === "音频切片转文字") {
+    return "transcription";
+  }
+  if (errorCode.startsWith("refine_") || task.stage === "文稿优化") {
+    return "refine";
+  }
+  return "";
+}
+
+function modelRetrySuggestion(kind) {
+  if (kind === "transcription") {
+    return "建议：请检查音频转文字模型的 API Base URL、API Key、模型名称和识别方式是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
+  }
+  if (kind === "refine") {
+    return "建议：请检查文稿优化模型的 API Base URL、API Key 和模型名称是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
+  }
+  return "";
+}
+
 function renderTask() {
   const task = getTaskState();
   const workflowState = getWorkflowState(task);
   const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
   const logText = task.logs.length ? task.logs.map(formatLog).join("\n") : "暂无日志";
-  const canCancel = ["pending", "running", "waiting_model_retry"].includes(task.status);
+  const canCancel = ["pending", "running"].includes(task.status);
+  const retryKind = retryableModelKind(task);
+  const canRetryModel = Boolean(task.taskId && retryKind);
   const isLocalUpload = task.sourceType === "local_upload";
   const hasFinalMarkdown = Boolean(task.finalMarkdown);
   const hasCleanSubtitle = Boolean(task.cleanSubtitle);
@@ -657,7 +718,7 @@ function renderTask() {
       : task.status === "abandoned"
         ? "任务长时间未轮询，已被标记为 abandoned。"
         : task.status === "waiting_model_retry"
-          ? "阶段 6 已暂停，可以重试或更换第一模型后再试。"
+          ? "模型调用已暂停，检查相关设置和连接后可以重做。"
         : "";
 
   renderWorkflowState(task);
@@ -681,6 +742,7 @@ function renderTask() {
     elements.resultDuration.hidden = !elapsedText || workflowState !== "completed";
   }
   elements.errorMessage.textContent = task.error || fallbackError;
+  elements.errorSuggestion.textContent = modelRetrySuggestion(retryKind);
   const shouldScrollLogToLatest = elements.logPanel.textContent !== logText;
   if (shouldScrollLogToLatest) {
     elements.logPanel.textContent = logText;
@@ -688,7 +750,10 @@ function renderTask() {
   elements.fullLog.textContent = logText;
   elements.cleanSubtitle.textContent = task.cleanSubtitle || "暂无内容";
   elements.aiTranscript.textContent = task.aiTranscript || "暂无内容";
+  elements.cancelTask.hidden = canRetryModel;
   elements.cancelTask.disabled = !task.taskId || !canCancel;
+  elements.retryModel.hidden = !canRetryModel;
+  elements.retryModel.disabled = !canRetryModel;
   elements.taskInput.disabled = workflowState !== "idle";
   elements.sendButton.disabled = workflowState !== "idle" || canCancel;
   elements.uploadButton.disabled = workflowState !== "idle" || canCancel;
@@ -908,8 +973,6 @@ function applyTaskResponse(payload) {
     );
   } else if (shouldOfferSubtitleSkip(payload)) {
     showSubtitleFailureModal(payload.error);
-  } else if (shouldOfferTranscriptionRetry(payload)) {
-    showTranscriptionRetryModal(payload.error);
   }
 
   if (terminalTaskStatuses.has(payload.status)) {
@@ -1651,6 +1714,11 @@ function updateInputStatus() {
 
 async function resetWorkflow() {
   const currentTask = getTaskState();
+
+  stopPolling();
+  taskGeneration += 1;
+  const resetGeneration = taskGeneration;
+
   if (currentTask.status === "waiting_model_retry" && currentTask.taskId) {
     try {
       await cancelTask(currentTask.taskId);
@@ -1659,10 +1727,17 @@ async function resetWorkflow() {
     }
   }
 
-  stopPolling();
-  taskGeneration += 1;
   hideSubtitleFailureModal();
   hideTranscriptionRetryModal();
+
+  if (getWorkflowState(currentTask) !== "idle") {
+    applyWorkflowState("idle");
+    await waitForWorkflowCollapse();
+    if (resetGeneration !== taskGeneration) {
+      return;
+    }
+  }
+
   lastTaskInput = "";
   lastCollapsedIntermediateResultKey = "";
   setTaskState({
@@ -1966,6 +2041,32 @@ async function handleCancelTask() {
   }
 }
 
+async function handleRetryModel() {
+  const task = getTaskState();
+  const kind = retryableModelKind(task);
+  if (!task.taskId || !kind) {
+    return;
+  }
+
+  elements.retryModel.disabled = true;
+  try {
+    const config = await getModelConfig(kind);
+    hideTranscriptionRetryModal();
+    taskGeneration += 1;
+    const currentGeneration = taskGeneration;
+    const payload = kind === "transcription"
+      ? await retryTranscription(task.taskId, config)
+      : await retryRefine(task.taskId, config);
+    applyTaskResponse(payload);
+    if (!terminalTaskStatuses.has(payload.status)) {
+      startPolling(payload.task_id, currentGeneration);
+    }
+  } catch (error) {
+    const fallback = kind === "transcription" ? "音频转文字重做请求失败" : "文稿优化重做请求失败";
+    log("error", error instanceof Error ? error.message : fallback);
+  }
+}
+
 async function handleRetryTranscription() {
   const task = getTaskState();
   if (!task.taskId || task.status !== "waiting_model_retry") {
@@ -2060,6 +2161,7 @@ function bindEvents() {
   elements.uploadButton?.addEventListener("click", handleUploadButtonClick);
   elements.localMediaInput?.addEventListener("change", handleLocalMediaSelection);
   elements.cancelTask.addEventListener("click", handleCancelTask);
+  elements.retryModel?.addEventListener("click", handleRetryModel);
   elements.skipSubtitleButton.addEventListener("click", handleSkipSubtitle);
   elements.dismissSubtitleButtons.forEach((button) =>
     button.addEventListener("click", hideSubtitleFailureModal),

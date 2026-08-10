@@ -139,6 +139,21 @@ export async function retryTranscription(taskId, transcriptionConfig) {
   return parseTaskResponse(response, "Task transcription retry request failed");
 }
 
+export async function retryRefine(taskId, refineConfig) {
+  const response = await fetch(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/retry-refine`), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refine_model_config: toBackendModelConfig(refineConfig),
+    }),
+  });
+
+  return parseTaskResponse(response, "Task refine retry request failed");
+}
+
 export async function openBilibiliLoginWindow() {
   const response = await fetch(apiUrl("/api/bilibili/profile/open-login"), {
     method: "POST",

@@ -11,8 +11,16 @@ from types import MethodType
 
 from backend.app.audio import AudioPart
 from backend.app.cleanup import TaskTempDirManager
-from backend.app.llm_client import TranscriptionProcessingError
-from backend.app.models import ModelConfig, TaskOptions, TaskStatus
+from backend.app.llm_client import RefineProcessingError, TranscriptionProcessingError
+from backend.app.models import (
+    ModelConfig,
+    RefineRetryRequest,
+    TaskOptions,
+    TaskResult,
+    TaskStage,
+    TaskStatus,
+    TranscriptionRetryRequest,
+)
 from backend.app.task_manager import TaskManager, TaskRecord
 
 
@@ -57,7 +65,7 @@ class TaskTempDirManagerTests(unittest.TestCase):
 
 
 class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
-    async def test_transcription_pause_cleans_audio_before_retry(self) -> None:
+    async def test_transcription_pause_preserves_audio_and_previous_results_before_retry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "tasks"
             manager = TaskManager(TaskTempDirManager(root))
@@ -67,6 +75,7 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
             part_path.parent.mkdir(parents=True)
             part_path.write_bytes(b"audio")
             record.audio_parts = [AudioPart(1, part_path.name, part_path, 0, 1, 1, 0)]
+            record.result = TaskResult(clean_subtitle="已完成的字幕识别结果")
 
             manager._pause_stage6_for_retry(
                 record,
@@ -74,10 +83,68 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
             )
 
             self.assertEqual(record.status, TaskStatus.WAITING_MODEL_RETRY)
+            self.assertEqual(record.stage, TaskStage.TRANSCRIBE_AUDIO)
+            self.assertIsNotNone(record.temp_dir)
+            self.assertEqual(len(record.audio_parts), 1)
+            self.assertTrue(part_path.exists())
+            self.assertEqual(record.result.clean_subtitle, "已完成的字幕识别结果")
+            self.assertEqual(record.retry_bilibili_cookie_header, "SESSDATA=test")
+
+    async def test_refine_pause_preserves_subtitle_and_transcript_but_cleans_audio(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "tasks"
+            manager = TaskManager(TaskTempDirManager(root))
+            record = build_record("task-refine-pause")
+            record.temp_dir = manager._temp_dirs.create(record.task_id)
+            part_path = record.temp_dir / "stage5" / "parts" / "part_001.mp3"
+            part_path.parent.mkdir(parents=True)
+            part_path.write_bytes(b"audio")
+            record.audio_parts = [AudioPart(1, part_path.name, part_path, 0, 1, 1, 0)]
+            record.result = TaskResult(
+                clean_subtitle="已完成的字幕识别结果",
+                ai_transcript="已完成的音频转文字结果",
+            )
+
+            manager._pause_stage7_for_retry(
+                record,
+                RefineProcessingError("refine_api_error", "第二模型暂时不可用"),
+            )
+
+            self.assertEqual(record.status, TaskStatus.WAITING_MODEL_RETRY)
+            self.assertEqual(record.stage, TaskStage.REFINE_MARKDOWN)
+            self.assertEqual(record.result.clean_subtitle, "已完成的字幕识别结果")
+            self.assertEqual(record.result.ai_transcript, "已完成的音频转文字结果")
             self.assertIsNone(record.temp_dir)
             self.assertEqual(record.audio_parts, [])
             self.assertFalse(root.exists())
-            self.assertEqual(record.retry_bilibili_cookie_header, "SESSDATA=test")
+            self.assertEqual(record.secret_values, [])
+
+    async def test_model_retry_endpoints_do_not_cross_stage_boundaries(self) -> None:
+        manager = TaskManager()
+        transcription_record = build_record("task-stage6-boundary")
+        transcription_record.status = TaskStatus.WAITING_MODEL_RETRY
+        transcription_record.stage = TaskStage.TRANSCRIBE_AUDIO
+        refine_record = build_record("task-stage7-boundary")
+        refine_record.status = TaskStatus.WAITING_MODEL_RETRY
+        refine_record.stage = TaskStage.REFINE_MARKDOWN
+        manager._tasks = {
+            transcription_record.task_id: transcription_record,
+            refine_record.task_id: refine_record,
+        }
+
+        transcription_response = await manager.retry_refine(
+            transcription_record.task_id,
+            RefineRetryRequest(refine_model_config=ModelConfig(api_key="new-refine-secret")),
+        )
+        refine_response = await manager.retry_transcription(
+            refine_record.task_id,
+            TranscriptionRetryRequest(transcription_model_config=ModelConfig(api_key="new-audio-secret")),
+        )
+
+        self.assertEqual(transcription_response.status, TaskStatus.WAITING_MODEL_RETRY)
+        self.assertEqual(refine_response.status, TaskStatus.WAITING_MODEL_RETRY)
+        self.assertIsNone(transcription_record.worker_task)
+        self.assertIsNone(refine_record.worker_task)
 
     async def test_cancel_waits_for_worker_before_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -133,22 +200,22 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(record.worker_task.done())
             self.assertFalse(root.exists())
 
-    async def test_retry_recreates_audio_then_cleans_on_success(self) -> None:
+    async def test_transcription_retry_reuses_audio_without_rerunning_stage4(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "tasks"
             manager = TaskManager(TaskTempDirManager(root))
             record = build_record("task-retry")
             record.status = TaskStatus.RUNNING
+            record.temp_dir = manager._temp_dirs.create(record.task_id)
+            part_path = record.temp_dir / "stage5" / "parts" / "part_001.mp3"
+            part_path.parent.mkdir(parents=True)
+            part_path.write_bytes(b"audio")
+            record.audio_parts = [AudioPart(1, part_path.name, part_path, 0, 1, 1, 0)]
             manager._tasks[record.task_id] = record
             calls: list[str] = []
 
             async def fake_stage4(_manager: TaskManager, current: TaskRecord) -> None:
-                calls.append("stage4")
-                assert current.temp_dir is not None
-                part_path = current.temp_dir / "stage5" / "parts" / "part_001.mp3"
-                part_path.parent.mkdir(parents=True)
-                part_path.write_bytes(b"audio")
-                current.audio_parts = [AudioPart(1, part_path.name, part_path, 0, 1, 1, 0)]
+                self.fail("音频转文字重做不应重新执行阶段 4")
 
             async def fake_stage6(_manager: TaskManager, current: TaskRecord) -> None:
                 calls.append("stage6")
@@ -163,9 +230,39 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
 
             await manager._resume_stage6_task(record.task_id)
 
-            self.assertEqual(calls, ["stage4", "stage6", "stage7"])
+            self.assertEqual(calls, ["stage6", "stage7"])
             self.assertEqual(record.status, TaskStatus.COMPLETED)
             self.assertFalse(root.exists())
+
+    async def test_refine_retry_runs_only_stage7_with_preserved_text_results(self) -> None:
+        manager = TaskManager()
+        record = build_record("task-refine-retry")
+        record.status = TaskStatus.RUNNING
+        record.stage = TaskStage.REFINE_MARKDOWN
+        record.result = TaskResult(
+            clean_subtitle="已完成的字幕识别结果",
+            ai_transcript="已完成的音频转文字结果",
+        )
+        manager._tasks[record.task_id] = record
+        calls: list[str] = []
+
+        async def fail_stage6(_manager: TaskManager, _current: TaskRecord) -> None:
+            self.fail("文稿优化重做不应重新执行阶段 6")
+
+        async def fake_stage7(_manager: TaskManager, current: TaskRecord) -> None:
+            calls.append("stage7")
+            self.assertEqual(current.result.clean_subtitle, "已完成的字幕识别结果")
+            self.assertEqual(current.result.ai_transcript, "已完成的音频转文字结果")
+            current.result.final_markdown = "# 重做完成"
+
+        manager._run_stage6_workflow = MethodType(fail_stage6, manager)
+        manager._run_stage7_workflow = MethodType(fake_stage7, manager)
+
+        await manager._resume_stage7_task(record.task_id)
+
+        self.assertEqual(calls, ["stage7"])
+        self.assertEqual(record.result.final_markdown, "# 重做完成")
+        self.assertEqual(record.status, TaskStatus.COMPLETED)
 
     async def test_shutdown_cleans_active_and_stale_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

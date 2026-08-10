@@ -47,6 +47,7 @@ from .llm_client import (
 )
 from .models import (
     ModelConfig,
+    RefineRetryRequest,
     TaskCreateRequest,
     TaskLogEntry,
     TaskOptions,
@@ -273,7 +274,10 @@ class TaskManager:
     async def retry_transcription(self, task_id: str, request: TranscriptionRetryRequest) -> TaskStatusResponse:
         async with self._lock:
             record = self._get_record_locked(task_id)
-            if record.status != TaskStatus.WAITING_MODEL_RETRY:
+            if (
+                record.status != TaskStatus.WAITING_MODEL_RETRY
+                or record.stage != TaskStage.TRANSCRIBE_AUDIO
+            ):
                 return self._to_response(record)
 
             record.transcription_model_config = request.transcription_model_config
@@ -283,17 +287,38 @@ class TaskManager:
             record.cancel_event = asyncio.Event()
             record.status = TaskStatus.RUNNING
             record.stage = TaskStage.TRANSCRIBE_AUDIO
-            if record.source_type == "local_upload":
-                record.current_item = "使用已上传的本地文件重试阶段 6"
-                self._add_log(record, "info", "用户已请求重新尝试阶段 6；将复用暂存的本地 MP3 切片")
-            else:
-                record.current_item = "等待重新准备音频并重试阶段 6"
-                self._add_log(
-                    record,
-                    "info",
-                    "用户已请求重新尝试阶段 6；此前临时音频已清理，本次将重新下载并切片",
-                )
+            record.current_item = "使用已准备的 MP3 切片重做音频转文字"
+            self._add_log(
+                record,
+                "info",
+                "用户已请求重做音频转文字；保留字幕等前置结果，仅复用暂存的 MP3 切片重新调用第一模型",
+            )
             record.worker_task = asyncio.create_task(self._resume_stage6_task(task_id))
+            return self._to_response(record)
+
+    async def retry_refine(self, task_id: str, request: RefineRetryRequest) -> TaskStatusResponse:
+        async with self._lock:
+            record = self._get_record_locked(task_id)
+            if (
+                record.status != TaskStatus.WAITING_MODEL_RETRY
+                or record.stage != TaskStage.REFINE_MARKDOWN
+            ):
+                return self._to_response(record)
+
+            record.refine_model_config = request.refine_model_config
+            record.secret_values.append(request.refine_model_config.api_key)
+            record.error = None
+            record.error_code = None
+            record.cancel_event = asyncio.Event()
+            record.status = TaskStatus.RUNNING
+            record.stage = TaskStage.REFINE_MARKDOWN
+            record.current_item = "使用已完成的字幕和音频转写稿重做文稿优化"
+            self._add_log(
+                record,
+                "info",
+                "用户已请求重做文稿优化；保留字幕和 AI 音频转文字稿，仅重新调用第二模型",
+            )
+            record.worker_task = asyncio.create_task(self._resume_stage7_task(task_id))
             return self._to_response(record)
 
     def cleanup_stale_temp_dirs(self) -> None:
@@ -418,13 +443,7 @@ class TaskManager:
         except TranscriptionProcessingError as exc:
             self._pause_stage6_for_retry(record, exc)
         except RefineProcessingError as exc:
-            record.stage = TaskStage.CLEANUP_TEMP
-            record.error = redact_secrets(exc.message, record.secret_values)
-            record.error_code = exc.code
-            self._add_log(record, "error", f"任务失败：{record.error}")
-            self._cleanup_record(record)
-            self._clear_secrets(record)
-            record.status = TaskStatus.FAILED
+            self._pause_stage7_for_retry(record, exc)
         except Exception as exc:  # pragma: no cover - defensive safety net
             record.stage = TaskStage.CLEANUP_TEMP
             record.error = redact_secrets(exc, record.secret_values)
@@ -443,14 +462,10 @@ class TaskManager:
         try:
             async with self._global_semaphore:
                 if not record.temp_dir or not record.audio_parts:
-                    if record.source_type == "local_upload":
-                        raise AudioProcessingError(
-                            "local_upload_retry_missing",
-                            "本地上传文件的临时音频已不存在，请取消当前任务后重新上传文件。",
-                        )
-                    record.temp_dir = self._temp_dirs.create(record.task_id)
-                    self._add_log(record, "info", "阶段 6 重试前重新准备任务临时目录和音频")
-                    await self._run_stage4_workflow(record)
+                    raise AudioProcessingError(
+                        "model_retry_audio_missing",
+                        "重做音频转文字所需的暂存 MP3 切片已不存在。为避免重复执行字幕识别等前置流程，请返回输入后重新创建任务。",
+                    )
 
                 await self._run_stage6_workflow(record)
                 await self._run_stage7_workflow(record)
@@ -489,13 +504,47 @@ class TaskManager:
         except TranscriptionProcessingError as exc:
             self._pause_stage6_for_retry(record, exc)
         except RefineProcessingError as exc:
+            self._pause_stage7_for_retry(record, exc)
+        except Exception as exc:  # pragma: no cover - defensive safety net
             record.stage = TaskStage.CLEANUP_TEMP
-            record.error = redact_secrets(exc.message, record.secret_values)
-            record.error_code = exc.code
+            record.error = redact_secrets(exc, record.secret_values)
+            record.error_code = "internal_error"
             self._add_log(record, "error", f"任务失败：{record.error}")
             self._cleanup_record(record)
             self._clear_secrets(record)
             record.status = TaskStatus.FAILED
+        finally:
+            if record.status in TERMINAL_STATUSES:
+                self._cleanup_record(record)
+                self._clear_secrets(record)
+
+    async def _resume_stage7_task(self, task_id: str) -> None:
+        record = self._tasks[task_id]
+        try:
+            async with self._global_semaphore:
+                await self._run_stage7_workflow(record)
+
+                record.stage = TaskStage.CLEANUP_TEMP
+                record.progress = 98
+                self._add_log(record, "info", "开始清理临时文件")
+                self._cleanup_record(record)
+
+                record.stage = TaskStage.COMPLETED
+                record.progress = 100
+                record.current_item = None
+                self._add_log(record, "info", "文稿优化重做成功，最终 Markdown 文稿已生成")
+                self._clear_secrets(record)
+                record.status = TaskStatus.COMPLETED
+        except asyncio.CancelledError:
+            if record.status not in TERMINAL_STATUSES:
+                record.stage = TaskStage.CLEANUP_TEMP
+                record.error = "任务已取消"
+                self._add_log(record, "warning", "任务已取消")
+                record.status = TaskStatus.CANCELED
+            self._cleanup_record(record)
+            self._clear_secrets(record)
+        except RefineProcessingError as exc:
+            self._pause_stage7_for_retry(record, exc)
         except Exception as exc:  # pragma: no cover - defensive safety net
             record.stage = TaskStage.CLEANUP_TEMP
             record.error = redact_secrets(exc, record.secret_values)
@@ -1101,17 +1150,32 @@ class TaskManager:
         self._add_log(
             record,
             "error",
-            f"阶段 6 暂停：{record.error}。可在前端选择重试、重新配置第一模型后重试，或取消任务。",
+            f"阶段 6 暂停：{record.error}。可检查音频转文字模型配置和连接后重做，或返回输入。",
         )
-        if record.source_type == "local_upload":
-            self._add_log(
-                record,
-                "info",
-                "阶段 6 暂停后暂存本地文件与 MP3 切片，以便用户直接重试；取消或超时后会自动清理",
-            )
-        else:
-            self._cleanup_record(record)
-            self._add_log(record, "info", "阶段 6 暂停后已清理全部临时音频；重试时会重新下载")
+        self._add_log(
+            record,
+            "info",
+            "阶段 6 暂停后保留字幕等前置结果和 MP3 切片；重做仅重新调用第一模型，返回输入或超时后会自动清理",
+        )
+
+    def _pause_stage7_for_retry(self, record: TaskRecord, exc: RefineProcessingError) -> None:
+        record.stage = TaskStage.REFINE_MARKDOWN
+        record.error = redact_secrets(exc.message, record.secret_values)
+        record.error_code = exc.code
+        record.current_item = None
+        record.status = TaskStatus.WAITING_MODEL_RETRY
+        self._add_log(
+            record,
+            "error",
+            f"阶段 7 暂停：{record.error}。可检查文稿优化模型配置和连接后重做，或返回输入。",
+        )
+        self._cleanup_record(record)
+        self._clear_secrets(record)
+        self._add_log(
+            record,
+            "info",
+            "阶段 7 暂停后保留字幕和 AI 音频转文字稿；重做仅重新调用第二模型",
+        )
 
     async def _sleep_or_cancel(self, record: TaskRecord, delay_seconds: float) -> None:
         try:

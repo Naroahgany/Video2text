@@ -93,11 +93,15 @@
                 </div>
                 <h2 data-stage-text>等待创建任务</h2>
                 <p class="error-line" data-error-message></p>
+                <p class="error-suggestion" data-error-suggestion></p>
               </div>
               <div class="task-actions">
                 <span class="progress-pill" data-progress-label>0%</span>
                 <button class="secondary-button compact" type="button" data-cancel-task disabled>
                   取消
+                </button>
+                <button class="secondary-button compact" type="button" data-retry-model hidden>
+                  重做
                 </button>
                 <button class="secondary-button compact reset-button" type="button" data-reset-workflow>
                   返回输入

@@ -329,7 +329,6 @@ svg {
   overflow: hidden;
   transform: translateY(0);
   transition:
-    border-radius 260ms ease,
     border-color 260ms ease,
     box-shadow 300ms ease;
 }
@@ -337,9 +336,16 @@ svg {
 .app-state-running .workflow-panel,
 .app-state-completed .workflow-panel,
 .app-state-failed .workflow-panel {
-  border-radius: 18px;
+  border-radius: 30px;
   border-color: var(--border);
   box-shadow: 0 14px 38px rgb(0 0 0 / 0.08);
+}
+
+.app-state-idle .workflow-panel {
+  transition:
+    border-radius 0s linear 360ms,
+    border-color 260ms ease,
+    box-shadow 300ms ease;
 }
 
 .workflow-titlebar {
@@ -637,6 +643,18 @@ svg {
 }
 
 .error-line:empty {
+  display: none;
+}
+
+.error-suggestion {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.error-suggestion:empty {
   display: none;
 }
 

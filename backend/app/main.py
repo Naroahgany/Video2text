@@ -28,6 +28,7 @@ from .models import (
     BilibiliProfileStatusResponse,
     ModelListRequest,
     ModelListResponse,
+    RefineRetryRequest,
     TaskCreateRequest,
     TaskStatusResponse,
     TranscriptionRetryRequest,
@@ -140,6 +141,14 @@ async def cancel_task(task_id: str) -> TaskStatusResponse:
 async def retry_transcription(task_id: str, request: TranscriptionRetryRequest) -> TaskStatusResponse:
     try:
         return await task_manager.retry_transcription(task_id, request)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在") from exc
+
+
+@app.post("/api/tasks/{task_id}/retry-refine", response_model=TaskStatusResponse)
+async def retry_refine(task_id: str, request: RefineRetryRequest) -> TaskStatusResponse:
+    try:
+        return await task_manager.retry_refine(task_id, request)
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail="任务不存在") from exc
 
