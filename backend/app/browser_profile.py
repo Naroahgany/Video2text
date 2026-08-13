@@ -63,7 +63,7 @@ def profile_status() -> dict[str, Any]:
     return {
         "available": exists,
         "profile_path_hint": profile_relative_path(),
-        "message": "本地专用浏览器 Profile 已创建" if exists else "尚未创建本地专用浏览器 Profile",
+        "message": "本地专用浏览器Profile已创建" if exists else "尚未创建本地专用浏览器Profile",
     }
 
 
@@ -105,7 +105,7 @@ def open_login_window() -> dict[str, Any]:
                 "opened": True,
                 "profile_path_hint": profile_relative_path(),
                 "session_token": active_token,
-                "message": "本地专用 B站登录窗口已打开，请在该窗口完成登录后回到本页提取 Cookie。",
+                "message": "本地专用B站登录窗口已打开，请在该窗口完成登录后回到本页提取Cookie。",
             }
         _ACTIVE_LOGIN_SESSIONS.pop(active_token, None)
 
@@ -126,7 +126,7 @@ def open_login_window() -> dict[str, Any]:
         consume_cookie_extract_session(session_token)
         raise RuntimeError(
             "B站登录窗口启动超时，请检查网络或安全软件后重试；"
-            "如果仍失败，请重新运行项目启动脚本修复 Playwright Chromium。"
+            "如果仍失败，请重新运行项目启动脚本修复Playwright Chromium。"
         )
     if session.error:
         error = session.error
@@ -137,7 +137,7 @@ def open_login_window() -> dict[str, Any]:
         "opened": True,
         "profile_path_hint": profile_relative_path(),
         "session_token": session_token,
-        "message": "已打开本地专用 B站登录窗口，请在该窗口中完成登录。",
+        "message": "已打开本地专用B站登录窗口，请在该窗口中完成登录。",
     }
 
 
@@ -162,7 +162,7 @@ def extract_simplified_cookie_header_from_profile(session_token: str | None = No
         error = _COOKIE_EXTRACT_ERRORS.pop(token)
         raise RuntimeError(error)
     if token:
-        raise RuntimeError("登录窗口会话已结束或本地服务已重启，请重新打开 B站登录窗口后再提取 Cookie。")
+        raise RuntimeError("登录窗口会话已结束或本地服务已重启，请重新打开B站登录窗口后再提取Cookie。")
 
     raw_cookies = _read_profile_cookies()
     bilibili_cookies: list[dict[str, Any]] = []
@@ -177,13 +177,13 @@ def extract_simplified_cookie_header_from_profile(session_token: str | None = No
         fields = _inspect_cookie_db_whitelist_fields()
         if fields:
             raise RuntimeError(
-                "本地专用浏览器 Profile 的 Cookie 数据库中已存在精简字段，"
-                "但 Playwright 关闭后重开 Profile 时没有返回 Cookie。"
-                "请重新打开 B站登录窗口，保持窗口打开并点击提取；如仍失败，可先使用手动 Cookie 输入作为临时排错路径。"
+                "本地专用浏览器Profile的Cookie数据库中已存在精简字段，"
+                "但Playwright关闭后重开Profile时没有返回Cookie。"
+                "请重新打开B站登录窗口，保持窗口打开并点击提取；如仍失败，可先使用手动Cookie输入作为临时排错路径。"
             )
-        raise RuntimeError("本地专用浏览器 Profile 未读取到 6 项精简 B站 Cookie，请确认已登录后重试。")
+        raise RuntimeError("本地专用浏览器Profile未读取到6项精简B站Cookie，请确认已登录后重试。")
 
-    return _cookie_response_payload(cookie_header, "已从本地专用 Profile 提取并精简 B站 Cookie。")
+    return _cookie_response_payload(cookie_header, "已从本地专用Profile提取并精简B站Cookie。")
 
 
 def _cleanup_cookie_extract_sessions() -> None:
@@ -208,7 +208,7 @@ def fetch_bilibili_page_state_from_profile(url: str) -> dict[str, Any]:
     def read_page(page: Any) -> dict[str, Any]:
         response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
         if response and response.status >= 400:
-            raise RuntimeError(f"本地专用浏览器 Profile 访问视频页失败：HTTP {response.status}")
+            raise RuntimeError(f"本地专用浏览器Profile访问视频页失败：HTTP {response.status}")
         page.wait_for_timeout(5000)
         state = page.evaluate(
             """
@@ -237,7 +237,7 @@ def fetch_player_wbi_payload_from_profile(url: str, params: dict[str, object]) -
     def read_payload(page: Any) -> dict[str, Any]:
         response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
         if response and response.status >= 400:
-            raise RuntimeError(f"本地专用浏览器 Profile 访问视频页失败：HTTP {response.status}")
+            raise RuntimeError(f"本地专用浏览器Profile访问视频页失败：HTTP {response.status}")
         path = f"/x/player/wbi/v2?{urlencode(safe_params)}"
         payload = page.evaluate(
             """
@@ -256,15 +256,15 @@ def fetch_player_wbi_payload_from_profile(url: str, params: dict[str, object]) -
             path,
         )
         if not isinstance(payload, dict):
-            raise RuntimeError("本地专用浏览器 Profile 字幕接口返回格式无法识别")
+            raise RuntimeError("本地专用浏览器Profile字幕接口返回格式无法识别")
         if not payload.get("ok"):
-            raise RuntimeError(f"本地专用浏览器 Profile 字幕接口失败：HTTP {payload.get('status')}")
+            raise RuntimeError(f"本地专用浏览器Profile字幕接口失败：HTTP {payload.get('status')}")
         import json
 
         try:
             data = json.loads(str(payload.get("text") or ""))
         except json.JSONDecodeError as exc:
-            raise RuntimeError("本地专用浏览器 Profile 字幕接口返回内容不是有效 JSON") from exc
+            raise RuntimeError("本地专用浏览器Profile字幕接口返回内容不是有效JSON") from exc
         return data if isinstance(data, dict) else {}
 
     return _with_profile_page(read_payload)
@@ -310,14 +310,14 @@ def _extract_from_active_login_session(token: str, session: _LoginWindowSession)
     session.result_ready.clear()
     session.extract_requested.set()
     if not session.result_ready.wait(timeout=20):
-        raise RuntimeError("正在等待 B站登录窗口响应提取请求，请确认登录窗口仍然打开后重试。")
+        raise RuntimeError("正在等待B站登录窗口响应提取请求，请确认登录窗口仍然打开后重试。")
     if session.result:
         _ACTIVE_LOGIN_SESSIONS.pop(token, None)
         _COOKIE_EXTRACT_ERRORS.pop(token, None)
         return session.result
     if session.error:
         raise RuntimeError(session.error)
-    raise RuntimeError("B站登录窗口没有返回 Cookie 提取结果，请重试。")
+    raise RuntimeError("B站登录窗口没有返回Cookie提取结果，请重试。")
 
 
 def _store_login_window_cookie_result(session_token: str | None, context: Any, success_message: str) -> bool:
@@ -328,7 +328,7 @@ def _store_login_window_cookie_result(session_token: str | None, context: Any, s
     try:
         cookie_header = _bilibili_cookie_header_from_collection(context.cookies(BILIBILI_COOKIE_URLS))
     except Exception as exc:
-        error = f"B站登录窗口读取 Cookie 失败：{_safe_playwright_error_detail(exc)}"
+        error = f"B站登录窗口读取Cookie失败：{_safe_playwright_error_detail(exc)}"
         _COOKIE_EXTRACT_ERRORS[token] = error
         if token in _ACTIVE_LOGIN_SESSIONS:
             _ACTIVE_LOGIN_SESSIONS[token].error = error
@@ -337,7 +337,7 @@ def _store_login_window_cookie_result(session_token: str | None, context: Any, s
 
     if not cookie_header:
         error = (
-            "当前 B站登录窗口没有读取到 6 项精简 Cookie。"
+            "当前B站登录窗口没有读取到6项精简Cookie。"
             "请确认窗口右上角已显示登录账号，保持窗口打开后再次点击提取。"
         )
         _COOKIE_EXTRACT_ERRORS[token] = error
@@ -362,7 +362,7 @@ def _extract_login_window_cookie_for_session(session_token: str | None, context:
     token = str(session_token or "")
     _COOKIE_EXTRACT_RESULTS.pop(token, None)
     _COOKIE_EXTRACT_ERRORS.pop(token, None)
-    ok = _store_login_window_cookie_result(token, context, "已从当前打开的 B站登录窗口提取并精简 Cookie。")
+    ok = _store_login_window_cookie_result(token, context, "已从当前打开的B站登录窗口提取并精简Cookie。")
     session.result = _COOKIE_EXTRACT_RESULTS.pop(token, None)
     session.error = _COOKIE_EXTRACT_ERRORS.pop(token, None)
     session.result_ready.set()
@@ -372,7 +372,7 @@ def _extract_login_window_cookie_for_session(session_token: str | None, context:
 def _with_profile_context(callback: Any) -> Any:
     _ensure_playwright_available()
     if not PROFILE_DIR.exists():
-        raise RuntimeError("本地专用浏览器 Profile 尚未创建，请先打开 B站登录窗口。")
+        raise RuntimeError("本地专用浏览器Profile尚未创建，请先打开B站登录窗口。")
 
     from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import sync_playwright
@@ -398,7 +398,7 @@ def _with_profile_context(callback: Any) -> Any:
                 continue
             raise RuntimeError(_playwright_error_message(exc)) from exc
 
-    raise RuntimeError("本地专用浏览器 Profile 读取失败，请稍后重试。")
+    raise RuntimeError("本地专用浏览器Profile读取失败，请稍后重试。")
 
 
 def _run_login_window(session_token: str | None = None) -> None:
@@ -432,11 +432,11 @@ def _run_login_window(session_token: str | None = None) -> None:
                             context.close()
                             return
                     if page.is_closed():
-                        _store_login_window_cookie_result(session_token, context, "已在 B站登录窗口关闭前提取并精简 Cookie。")
+                        _store_login_window_cookie_result(session_token, context, "已在B站登录窗口关闭前提取并精简Cookie。")
                         return
                     try:
                         page.wait_for_event("close", timeout=250)
-                        _store_login_window_cookie_result(session_token, context, "已在 B站登录窗口关闭前提取并精简 Cookie。")
+                        _store_login_window_cookie_result(session_token, context, "已在B站登录窗口关闭前提取并精简Cookie。")
                         return
                     except PlaywrightTimeoutError:
                         continue
@@ -465,23 +465,23 @@ def _ensure_playwright_available() -> None:
     try:
         import playwright.sync_api  # noqa: F401
     except ImportError as exc:
-        raise RuntimeError("本地登录窗口需要 Playwright，请先重新运行启动脚本安装后端依赖。") from exc
+        raise RuntimeError("本地登录窗口需要Playwright，请先重新运行启动脚本安装后端依赖。") from exc
 
 
 def _playwright_error_message(exc: Exception) -> str:
     message = str(exc).lower()
     if "executable doesn't exist" in message or "playwright install" in message:
-        return "Playwright Chromium 缺失或损坏，请关闭本地服务后重新运行项目启动脚本，程序会自动下载并修复。"
+        return "Playwright Chromium缺失或损坏，请关闭本地服务后重新运行项目启动脚本，程序会自动下载并修复。"
     if _is_profile_busy_error(exc):
-        return "本地专用浏览器 Profile 仍被登录窗口或 Chromium 后台进程占用，请等待几秒后重试；如果仍失败，请确认本工具打开的 B站登录窗口都已关闭。"
-    return f"本地专用浏览器 Profile 读取失败：{_safe_playwright_error_detail(exc)}"
+        return "本地专用浏览器Profile仍被登录窗口或Chromium后台进程占用，请等待几秒后重试；如果仍失败，请确认本工具打开的B站登录窗口都已关闭。"
+    return f"本地专用浏览器Profile读取失败：{_safe_playwright_error_detail(exc)}"
 
 
 def _login_window_error_message(exc: Exception) -> str:
     message = _playwright_error_message(exc)
-    prefix = "本地专用浏览器 Profile 读取失败："
+    prefix = "本地专用浏览器Profile读取失败："
     if message.startswith(prefix):
-        return f"本地专用 B站登录窗口启动失败：{message.removeprefix(prefix)}"
+        return f"本地专用B站登录窗口启动失败：{message.removeprefix(prefix)}"
     return message
 
 

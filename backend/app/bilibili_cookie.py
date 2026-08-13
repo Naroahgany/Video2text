@@ -98,7 +98,7 @@ async def validate_bilibili_cookie_header(cookie_header: str, timeout: float = 1
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": "未找到可用的 6 项精简 B站 Cookie，请先打开本地 B站登录窗口刷新凭据。",
+            "message": "未找到可用的6项精简B站Cookie，请先打开本地B站登录窗口刷新凭据。",
         }
 
     try:
@@ -113,14 +113,14 @@ async def validate_bilibili_cookie_header(cookie_header: str, timeout: float = 1
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": "精简 Cookie 校验超时，请稍后重试或重新打开本地 B站登录窗口刷新 Cookie。",
+            "message": "精简Cookie校验超时，请稍后重试或重新打开本地B站登录窗口刷新Cookie。",
         }
     except httpx.RequestError:
         return {
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": "精简 Cookie 校验失败，请检查网络后重试。",
+            "message": "精简Cookie校验失败，请检查网络后重试。",
         }
 
     if response.status_code == 412:
@@ -128,14 +128,14 @@ async def validate_bilibili_cookie_header(cookie_header: str, timeout: float = 1
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": "B站返回 HTTP 412，可能是 Cookie 失效或风控，请重新打开本地 B站登录窗口刷新 Cookie。",
+            "message": "B站返回HTTP 412，可能是Cookie失效或风控，请重新打开本地B站登录窗口刷新Cookie。",
         }
     if response.status_code >= 400:
         return {
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": f"精简 Cookie 校验失败：HTTP {response.status_code}，请重新刷新 Cookie。",
+            "message": f"精简Cookie校验失败：HTTP {response.status_code}，请重新刷新Cookie。",
         }
 
     try:
@@ -145,7 +145,7 @@ async def validate_bilibili_cookie_header(cookie_header: str, timeout: float = 1
             "valid": False,
             "is_logged_in": False,
             **description,
-            "message": "精简 Cookie 校验响应不是有效 JSON，请稍后重试。",
+            "message": "精简Cookie校验响应不是有效JSON，请稍后重试。",
         }
 
     code = payload.get("code") if isinstance(payload, dict) else None
@@ -156,15 +156,15 @@ async def validate_bilibili_cookie_header(cookie_header: str, timeout: float = 1
             "valid": True,
             "is_logged_in": True,
             **description,
-            "message": "精简 B站 Cookie 校验通过。",
+            "message": "精简B站Cookie校验通过。",
         }
 
-    message = str(payload.get("message") or "精简 Cookie 未登录或已失效") if isinstance(payload, dict) else "精简 Cookie 未登录或已失效"
+    message = str(payload.get("message") or "精简Cookie未登录或已失效") if isinstance(payload, dict) else "精简Cookie未登录或已失效"
     return {
         "valid": False,
         "is_logged_in": False,
         **description,
-        "message": f"{message}，请重新打开本地 B站登录窗口刷新 Cookie。",
+        "message": f"{message}，请重新打开本地B站登录窗口刷新Cookie。",
     }
 
 

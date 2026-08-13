@@ -76,7 +76,7 @@ class LocalMediaValidationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_imageio_ffmpeg_binary_is_used_when_command_name_is_missing(self) -> None:
         with patch("backend.app.audio.shutil.which", return_value=None):
-            executable = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg 不可用")
+            executable = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg不可用")
 
         self.assertTrue(Path(executable).is_file())
 
@@ -93,7 +93,7 @@ class LocalMediaValidationTests(unittest.IsolatedAsyncioTestCase):
                     ["ffmpeg"],
                     60,
                     "mp3_conversion_failed",
-                    "MP3 转换失败",
+                    "MP3转换失败",
                 )
 
         self.assertEqual(captured.exception.code, "audio_stream_missing")
@@ -159,7 +159,7 @@ class LocalMediaWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 "convert_audio_to_mp3",
                 side_effect=AudioProcessingError(
                     "audio_stream_missing",
-                    "输入文件中未检测到可用的音频轨，无法转换为 MP3。",
+                    "输入文件中未检测到可用的音频轨，无法转换为MP3。",
                 ),
             ):
                 for filename, media_kind in (
@@ -190,7 +190,7 @@ class LocalMediaWorkflowTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(captured.exception.code, "local_upload_audio_stream_missing")
                         self.assertEqual(
                             captured.exception.message,
-                            "FFmpeg 已成功读取文件，但其中没有可用的音频轨，无法进行转文字处理。请检查上传的文件是否包含音频轨。",
+                            "FFmpeg已成功读取文件，但其中没有可用的音频轨，无法进行转文字处理。请检查上传的文件是否包含音频轨。",
                         )
 
     def test_local_transcription_pause_preserves_upload_for_direct_retry(self) -> None:

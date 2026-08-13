@@ -71,7 +71,7 @@ class NoStoreStaticFiles(StaticFiles):
 app = FastAPI(
     title="B站视频转文字",
     version="0.1.0",
-    description="B站视频转文字 Workflow / Agent MVP skeleton.",
+    description="B站视频转文字Workflow / Agent MVP skeleton.",
     lifespan=lifespan,
 )
 
@@ -170,7 +170,7 @@ async def get_bilibili_profile_status() -> BilibiliProfileStatusResponse:
 @app.post("/api/bilibili/profile/extract-cookie", response_model=BilibiliCookieResponse)
 async def extract_bilibili_profile_cookie(request: BilibiliProfileCookieExtractRequest) -> BilibiliCookieResponse:
     if not validate_cookie_extract_session(request.session_token):
-        raise HTTPException(status_code=403, detail="Cookie 提取会话已失效，请重新打开本地 B站登录窗口。")
+        raise HTTPException(status_code=403, detail="Cookie提取会话已失效，请重新打开本地B站登录窗口。")
 
     try:
         payload = extract_simplified_cookie_header_from_profile(request.session_token)
@@ -255,7 +255,7 @@ def _should_trust_env_for_url(url: str) -> bool:
 async def list_models(request: ModelListRequest) -> ModelListResponse:
     base_url = request.base_url.strip().rstrip("/")
     if not base_url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="API Base URL 必须以 http:// 或 https:// 开头")
+        raise HTTPException(status_code=400, detail="API Base URL必须以http:// 或https:// 开头")
 
     try:
         async with httpx.AsyncClient(
@@ -275,7 +275,7 @@ async def list_models(request: ModelListRequest) -> ModelListResponse:
                 )
 
                 if response.status_code in {401, 403}:
-                    raise HTTPException(status_code=response.status_code, detail="API Key 无效或无权限")
+                    raise HTTPException(status_code=response.status_code, detail="API Key无效或无权限")
                 if response.status_code >= 400:
                     last_status = response.status_code
                     last_detail = f"模型列表获取失败：HTTP {response.status_code}"
@@ -284,7 +284,7 @@ async def list_models(request: ModelListRequest) -> ModelListResponse:
                 try:
                     payload = response.json()
                 except ValueError as exc:
-                    raise HTTPException(status_code=502, detail="模型列表响应不是有效 JSON") from exc
+                    raise HTTPException(status_code=502, detail="模型列表响应不是有效JSON") from exc
 
                 models = _normalize_model_ids(payload)
                 if models:
@@ -296,7 +296,7 @@ async def list_models(request: ModelListRequest) -> ModelListResponse:
     except httpx.TimeoutException as exc:
         raise HTTPException(status_code=504, detail="模型列表获取超时") from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail="模型列表获取失败，请检查 API Base URL") from exc
+        raise HTTPException(status_code=502, detail="模型列表获取失败，请检查API Base URL") from exc
 
 
 if FRONTEND_SRC_DIR.exists():

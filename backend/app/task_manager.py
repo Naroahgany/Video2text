@@ -162,7 +162,7 @@ class TaskManager:
         self._add_log(
             record,
             "info",
-            f"OpenAI-compatible 音频片段并发上限：{options.max_audio_request_concurrency}",
+            f"OpenAI-compatible音频片段并发上限：{options.max_audio_request_concurrency}",
         )
 
         async with self._lock:
@@ -216,21 +216,21 @@ class TaskManager:
                 parsed_input=f"本地上传：{safe_filename}",
                 subtitle_source="local_upload_placeholder",
                 clean_subtitle=LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
-                ai_transcript="本地文件已上传，等待转换 MP3 与音频转文字。",
+                ai_transcript="本地文件已上传，等待转换MP3与音频转文字。",
             ),
         )
         kind_label = {"video": "视频", "audio": "音频"}.get(media_kind, "音视频")
         self._add_log(
             record,
             "info",
-            f"本地{kind_label}文件上传完成：{safe_filename}（{bytes_written} 字节）",
+            f"本地{kind_label}文件上传完成：{safe_filename}（{bytes_written}字节）",
         )
-        self._add_log(record, "info", "本地上传任务将跳过 B站信息与字幕提取，直接转换 MP3、切片和转写")
+        self._add_log(record, "info", "本地上传任务将跳过B站信息与字幕提取，直接转换MP3、切片和转写")
         self._add_log(record, "info", f"全局重任务并发上限：{self.global_concurrency}")
         self._add_log(
             record,
             "info",
-            f"OpenAI-compatible 音频片段并发上限：{options.max_audio_request_concurrency}",
+            f"OpenAI-compatible音频片段并发上限：{options.max_audio_request_concurrency}",
         )
 
         async with self._lock:
@@ -287,11 +287,11 @@ class TaskManager:
             record.cancel_event = asyncio.Event()
             record.status = TaskStatus.RUNNING
             record.stage = TaskStage.TRANSCRIBE_AUDIO
-            record.current_item = "使用已准备的 MP3 切片重做音频转文字"
+            record.current_item = "使用已准备的MP3切片重做音频转文字"
             self._add_log(
                 record,
                 "info",
-                "用户已请求重做音频转文字；保留字幕等前置结果，仅复用暂存的 MP3 切片重新调用第一模型",
+                "用户已请求重做音频转文字；保留字幕等前置结果，仅复用暂存的MP3切片重新调用音频转文字模型",
             )
             record.worker_task = asyncio.create_task(self._resume_stage6_task(task_id))
             return self._to_response(record)
@@ -316,7 +316,7 @@ class TaskManager:
             self._add_log(
                 record,
                 "info",
-                "用户已请求重做文稿优化；保留字幕和 AI 音频转文字稿，仅重新调用第二模型",
+                "用户已请求重做文稿优化；保留字幕和AI音频转文字稿，仅重新调用文稿优化模型",
             )
             record.worker_task = asyncio.create_task(self._resume_stage7_task(task_id))
             return self._to_response(record)
@@ -342,7 +342,7 @@ class TaskManager:
 
                 record.cancel_event.set()
                 record.stage = TaskStage.CLEANUP_TEMP
-                record.error = "长时间没有前端轮询，任务已标记为 abandoned"
+                record.error = "长时间没有前端轮询，任务已标记为abandoned"
                 record.current_item = None
                 record.status = TaskStatus.ABANDONED
                 self._add_log(record, "warning", record.error)
@@ -413,7 +413,7 @@ class TaskManager:
                 record.stage = TaskStage.COMPLETED
                 record.progress = 100
                 record.current_item = None
-                self._add_log(record, "info", "阶段 7：最终 Markdown 文稿已生成")
+                self._add_log(record, "info", "阶段7：最终Markdown文稿已生成")
                 self._clear_secrets(record)
                 record.status = TaskStatus.COMPLETED
         except asyncio.CancelledError:
@@ -464,7 +464,7 @@ class TaskManager:
                 if not record.temp_dir or not record.audio_parts:
                     raise AudioProcessingError(
                         "model_retry_audio_missing",
-                        "重做音频转文字所需的暂存 MP3 切片已不存在。为避免重复执行字幕识别等前置流程，请返回输入后重新创建任务。",
+                        "重做音频转文字所需的暂存MP3切片已不存在。为避免重复执行字幕识别等前置流程，请返回输入后重新创建任务。",
                     )
 
                 await self._run_stage6_workflow(record)
@@ -478,7 +478,7 @@ class TaskManager:
                 record.stage = TaskStage.COMPLETED
                 record.progress = 100
                 record.current_item = None
-                self._add_log(record, "info", "阶段 6 重试成功，阶段 7 最终 Markdown 文稿已生成")
+                self._add_log(record, "info", "阶段6重试成功，阶段7最终Markdown文稿已生成")
                 self._clear_secrets(record)
                 record.status = TaskStatus.COMPLETED
         except asyncio.CancelledError:
@@ -532,7 +532,7 @@ class TaskManager:
                 record.stage = TaskStage.COMPLETED
                 record.progress = 100
                 record.current_item = None
-                self._add_log(record, "info", "文稿优化重做成功，最终 Markdown 文稿已生成")
+                self._add_log(record, "info", "文稿优化重做成功，最终Markdown文稿已生成")
                 self._clear_secrets(record)
                 record.status = TaskStatus.COMPLETED
         except asyncio.CancelledError:
@@ -583,8 +583,8 @@ class TaskManager:
         record.stage = TaskStage.CONVERT_MP3
         record.progress = 12
         kind_label = {"video": "视频", "audio": "音频"}.get(record.local_media_kind, "音视频")
-        record.current_item = f"将本地{kind_label}转换为 MP3"
-        self._add_log(record, "info", f"开始使用 FFmpeg 将本地{kind_label}统一转换为 MP3")
+        record.current_item = f"将本地{kind_label}转换为MP3"
+        self._add_log(record, "info", f"开始使用FFmpeg将本地{kind_label}统一转换为MP3")
         mp3_path = record.temp_dir / "stage5" / "converted" / "source.mp3"
         try:
             mp3_duration = await convert_audio_to_mp3(input_path, mp3_path)
@@ -592,10 +592,10 @@ class TaskManager:
             if exc.code == "audio_stream_missing":
                 raise AudioProcessingError(
                     "local_upload_audio_stream_missing",
-                    "FFmpeg 已成功读取文件，但其中没有可用的音频轨，无法进行转文字处理。请检查上传的文件是否包含音频轨。",
+                    "FFmpeg已成功读取文件，但其中没有可用的音频轨，无法进行转文字处理。请检查上传的文件是否包含音频轨。",
                 ) from exc
             raise
-        self._add_log(record, "info", f"本地文件已转换为 MP3，校验时长 {self._format_duration(mp3_duration)}")
+        self._add_log(record, "info", f"本地文件已转换为MP3，校验时长{self._format_duration(mp3_duration)}")
 
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.SPLIT_AUDIO
@@ -632,7 +632,7 @@ class TaskManager:
         self._add_log(
             record,
             "info",
-            "本地文件 MP3 转换与切片完成；已跳过 B站字幕提取，准备进入 AI 音频转文字",
+            "本地文件MP3转换与切片完成；已跳过B站字幕提取，准备进入AI音频转文字",
         )
 
     async def _run_stage4_workflow(self, record: TaskRecord) -> None:
@@ -643,7 +643,7 @@ class TaskManager:
         self._add_log(record, "info", "开始解析用户输入")
         parsed = parse_bilibili_input(record.original_input)
         record.current_item = parsed.display
-        self._add_log(record, "info", f"已识别 B站输入：{parsed.display}")
+        self._add_log(record, "info", f"已识别B站输入：{parsed.display}")
         self._log_subtitle_debug(record, f"inputUrl={parsed.url}")
         self._log_subtitle_debug(record, f"rawInputPreview={self._preview_text(record.original_input)}")
         self._log_subtitle_debug(record, f"parsedBvid={parsed.bv_id or '未解析'}")
@@ -654,7 +654,7 @@ class TaskManager:
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.FETCH_VIDEO_INFO
         record.progress = 4
-        self._add_log(record, "info", "开始获取 B站视频信息")
+        self._add_log(record, "info", "开始获取B站视频信息")
         try:
             video_info = await fetch_video_info(
                 parsed,
@@ -673,14 +673,14 @@ class TaskManager:
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.FETCH_SUBTITLE
         record.progress = 6
-        self._add_log(record, "info", "开始选择 B站自带字幕")
+        self._add_log(record, "info", "开始选择B站自带字幕")
         candidate = choose_subtitle_candidate(video_info)
         clean_text = ""
         subtitle_language = ""
         subtitle_source = ""
 
         if candidate is None:
-            message = "没有检测到 B站自带字幕"
+            message = "没有检测到B站自带字幕"
             if not record.options.skip_subtitle_if_failed:
                 raise BilibiliError(
                     BilibiliErrorCode.SUBTITLE_NOT_FOUND,
@@ -715,7 +715,7 @@ class TaskManager:
                     cleaned = clean_subtitle(raw_subtitle, candidate.ext)
                 except SubtitleProcessingError as exc:
                     if candidate.source == "html_initial_state":
-                        self._add_log(record, "warning", f"HTML 回退发现的字幕候选无法解析：{exc.message}，将继续尝试其他字幕路径")
+                        self._add_log(record, "warning", f"HTML回退发现的字幕候选无法解析：{exc.message}，将继续尝试其他字幕路径")
                         fallback_candidate = choose_subtitle_candidate(
                             BilibiliVideoInfo(
                                 title=video_info.title,
@@ -759,7 +759,7 @@ class TaskManager:
                 self._add_log(
                     record,
                     "info",
-                    f"字幕清理完成：格式 {cleaned.format}，正文 {cleaned.line_count} 行",
+                    f"字幕清理完成：格式{cleaned.format}，正文{cleaned.line_count}行",
                 )
             except (BilibiliError, SubtitleProcessingError) as exc:
                 if not record.options.skip_subtitle_if_failed:
@@ -777,14 +777,14 @@ class TaskManager:
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.DOWNLOAD_AUDIO
         record.progress = 10
-        record.current_item = "playurl 主路径"
-        self._add_log(record, "info", "开始阶段 5A：通过 x/player/playurl 主路径获取音频流")
+        record.current_item = "playurl主路径"
+        self._add_log(record, "info", "开始阶段5A：通过x/player/playurl主路径获取音频流")
         stream = await fetch_playurl_audio_stream(video_info, access_config)
         self._add_log(
             record,
             "info",
             (
-                "playurl 主路径已选择音频流："
+                "playurl主路径已选择音频流："
                 f"streamId={stream.audio_id or '未知'}，"
                 f"bandwidth={stream.bandwidth or '未知'}，"
                 f"backupUrl数量={len(stream.backup_urls)}"
@@ -801,11 +801,11 @@ class TaskManager:
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.CONVERT_MP3
         record.progress = 14
-        record.current_item = "MP3 转换"
-        self._add_log(record, "info", "开始使用 FFmpeg 将下载音频转换为 MP3")
+        record.current_item = "MP3转换"
+        self._add_log(record, "info", "开始使用FFmpeg将下载音频转换为MP3")
         mp3_path = record.temp_dir / "stage5" / "converted" / "source.mp3"
         mp3_duration = await convert_audio_to_mp3(downloaded_audio, mp3_path, video_info.duration_seconds)
-        self._add_log(record, "info", f"MP3 转换完成，校验时长：{self._format_duration(mp3_duration)}")
+        self._add_log(record, "info", f"MP3转换完成，校验时长：{self._format_duration(mp3_duration)}")
 
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.SPLIT_AUDIO
@@ -815,7 +815,7 @@ class TaskManager:
             record,
             "info",
             (
-                "开始按阶段 5 规则处理切片："
+                "开始按阶段5规则处理切片："
                 f"不切片阈值={record.options.no_slice_max_minutes}分钟，"
                 f"切片周期={record.options.target_chunk_minutes}分钟，"
                 f"重合={record.options.chunk_overlap_minutes}分钟"
@@ -833,7 +833,7 @@ class TaskManager:
         record.audio_parts = audio_parts
         record.progress = 20
         record.current_item = None
-        self._add_log(record, "info", "阶段 5 已完成；已在同一任务状态中登记音频片段，准备进入阶段 6")
+        self._add_log(record, "info", "阶段5已完成；已在同一任务状态中登记音频片段，准备进入阶段6")
         record.result = self._build_stage5_result(
             parsed_input=parsed.display,
             video_info=video_info,
@@ -849,13 +849,13 @@ class TaskManager:
         record.stage = TaskStage.TRANSCRIBE_AUDIO
         record.progress = max(record.progress, 20)
         record.current_item = "校验音频片段"
-        self._add_log(record, "info", "开始阶段 6：同任务音频片段接收与存在性校验")
+        self._add_log(record, "info", "开始阶段6：同任务音频片段接收与存在性校验")
 
         audio_parts = self._validate_stage6_audio_parts(record)
         total = len(audio_parts)
-        self._add_log(record, "info", f"阶段 6 检测到 {total} 个音频片段，全部为 MP3、文件仍存在且大小大于 0")
+        self._add_log(record, "info", f"阶段6检测到{total}个音频片段，全部为MP3、文件仍存在且大小大于0")
         transcription_provider = record.transcription_model_config.provider or OPENAI_INPUT_AUDIO_PROVIDER
-        self._add_log(record, "info", f"阶段 6 音频识别方式：{transcription_provider}")
+        self._add_log(record, "info", f"阶段6音频识别方式：{transcription_provider}")
 
         transcript_by_index = await self._transcribe_audio_parts(record, audio_parts)
 
@@ -863,10 +863,10 @@ class TaskManager:
         record.stage = TaskStage.MERGE_TRANSCRIPT
         record.progress = 72
         record.current_item = "合并转写稿"
-        self._add_log(record, "info", "所有音频片段转写成功，开始按编号顺序合并 AI 音频转文字稿")
+        self._add_log(record, "info", "所有音频片段转写成功，开始按编号顺序合并AI音频转文字稿")
         merged = self._merge_audio_transcripts(audio_parts, transcript_by_index)
         if not merged.strip():
-            raise TranscriptionProcessingError("transcription_empty_response", "阶段 6 合并后转写结果为空。")
+            raise TranscriptionProcessingError("transcription_empty_response", "阶段6合并后转写结果为空。")
 
         if record.result:
             record.result.ai_transcript = merged
@@ -874,7 +874,7 @@ class TaskManager:
             record.result.filename = "stage-6-audio-transcription-result.md"
 
         record.current_item = None
-        self._add_log(record, "info", "阶段 6 已生成完整 AI 音频转文字稿，后续阶段再进入文稿优化")
+        self._add_log(record, "info", "阶段6已生成完整AI音频转文字稿，后续阶段再进入文稿优化")
 
     async def _transcribe_audio_parts(
         self,
@@ -891,14 +891,14 @@ class TaskManager:
         concurrency = min(max(1, concurrency), total)
         mode = "有界并行" if concurrency > 1 else "串行"
         route_note = (
-            "每段在本机完成 Base64 转换后立即调用一次 API，完成顺序不影响最终拼接顺序"
+            "每段在本机完成Base64转换后立即调用一次API，完成顺序不影响最终拼接顺序"
             if is_openai_compatible
-            else "当前 provider 保持单片串行处理，结果仍按片段编号合并"
+            else "当前provider保持单片串行处理，结果仍按片段编号合并"
         )
         self._add_log(
             record,
             "info",
-            f"阶段 6 将以{mode}方式处理音频片段：并发上限 {concurrency}；{route_note}",
+            f"阶段6将以{mode}方式处理音频片段：并发上限{concurrency}；{route_note}",
         )
 
         semaphore = asyncio.Semaphore(concurrency)
@@ -911,7 +911,7 @@ class TaskManager:
                 text = await self._transcribe_audio_part_with_retries(record, part, total)
             completed_count += 1
             record.progress = min(70, 20 + int((completed_count / max(1, total)) * 50))
-            record.current_item = f"已完成 {completed_count}/{total} 个音频片段"
+            record.current_item = f"已完成{completed_count}/{total}个音频片段"
             return part.index, text
 
         tasks = [asyncio.create_task(run_part(part)) for part in audio_parts]
@@ -928,30 +928,30 @@ class TaskManager:
     async def _run_stage7_workflow(self, record: TaskRecord) -> None:
         await self._raise_if_cancelled(record)
         if not record.result:
-            raise RefineProcessingError("refine_missing_result", "阶段 7 调用前缺少任务结果结构。")
+            raise RefineProcessingError("refine_missing_result", "阶段7调用前缺少任务结果结构。")
 
         ai_transcript = strip_thinking_content(record.result.ai_transcript)
         if not ai_transcript:
-            raise RefineProcessingError("refine_transcript_missing", "阶段 7 调用前未拿到完整 AI 音频转文字稿。")
+            raise RefineProcessingError("refine_transcript_missing", "阶段7调用前未拿到完整AI音频转文字稿。")
         record.result.ai_transcript = ai_transcript
         record.result.final_markdown = ""
         record.result.filename = ""
 
         record.stage = TaskStage.REFINE_MARKDOWN
         record.progress = 75
-        record.current_item = "第二模型文稿优化"
+        record.current_item = "文稿优化模型进行最终整合"
         if record.source_type == "local_upload":
             self._add_log(
                 record,
                 "info",
-                "开始阶段 7：使用本地文件无原生字幕占位说明与 AI 音频转文字稿调用第二模型",
+                "开始阶段7：使用本地文件无原生字幕占位说明与AI音频转文字稿调用文稿优化模型",
             )
         else:
-            self._add_log(record, "info", "开始阶段 7：调用第二模型合并字幕与 AI 音频转文字稿")
+            self._add_log(record, "info", "开始阶段7：调用文稿优化模型合并字幕与AI音频转文字稿")
         self._add_log(
             record,
             "info",
-            "第二模型链路：OpenAI-compatible Chat Completions，"
+            "文稿优化模型链路：OpenAI-compatible Chat Completions，"
             f"stream={'开启' if record.refine_model_config.stream is not False else '关闭'}",
         )
 
@@ -966,19 +966,19 @@ class TaskManager:
         await self._raise_if_cancelled(record)
         record.stage = TaskStage.GENERATE_MARKDOWN
         record.progress = 95
-        record.current_item = "生成 Markdown 文件名"
+        record.current_item = "生成Markdown文件名"
         record.result.final_markdown = final_markdown
         record.result.filename = self._build_markdown_filename(record.result)
-        self._add_log(record, "info", f"阶段 7 文稿优化完成，最终 Markdown 正文长度 {len(final_markdown)} 字")
+        self._add_log(record, "info", f"阶段7文稿优化完成，最终Markdown正文长度{len(final_markdown)}字")
         self._add_log(record, "info", f"已生成下载文件名：{record.result.filename}")
 
     def _validate_stage6_audio_parts(self, record: TaskRecord) -> list[AudioPart]:
         possible_reasons = (
-            "可能原因：阶段 5 未成功产出音频、阶段 5 报错后仍进入阶段 6、"
+            "可能原因：阶段5未成功产出音频、阶段5报错后仍进入阶段6、"
             "临时目录被提前清理、任务状态丢失或本地服务异常重启。"
         )
         if not record.audio_parts:
-            message = f"阶段 6 未拿到阶段 5 的音频片段清单，或片段清单为空。{possible_reasons}"
+            message = f"阶段6未拿到阶段5的音频片段清单，或片段清单为空。{possible_reasons}"
             self._add_log(record, "error", message)
             raise AudioProcessingError("stage6_audio_parts_missing", message)
 
@@ -996,19 +996,19 @@ class TaskManager:
                 empty_or_unreadable.append(part.filename)
         if missing:
             message = (
-                f"阶段 6 拿到音频片段清单，但以下 MP3 临时文件不存在：{', '.join(missing)}。"
+                f"阶段6拿到音频片段清单，但以下MP3临时文件不存在：{', '.join(missing)}。"
                 f"{possible_reasons}"
             )
             self._add_log(record, "error", message)
             raise AudioProcessingError("stage6_audio_file_missing", message)
         if not_mp3:
-            message = f"阶段 6 只接受 MP3 音频片段，以下片段格式不符合要求：{', '.join(not_mp3)}。"
+            message = f"阶段6只接受MP3音频片段，以下片段格式不符合要求：{', '.join(not_mp3)}。"
             self._add_log(record, "error", message)
             raise AudioProcessingError("transcription_audio_not_mp3", message)
         if empty_or_unreadable:
             message = (
-                f"阶段 6 上传前校验失败，以下 MP3 切片文件为空或无法读取大小：{', '.join(empty_or_unreadable)}。"
-                "切片文件可能为空、损坏、临时目录被清理、任务状态丢失，或阶段 5 FFmpeg 切片输出异常。"
+                f"阶段6上传前校验失败，以下MP3切片文件为空或无法读取大小：{', '.join(empty_or_unreadable)}。"
+                "切片文件可能为空、损坏、临时目录被清理、任务状态丢失，或阶段5 FFmpeg切片输出异常。"
             )
             self._add_log(record, "error", message)
             raise AudioProcessingError("transcription_audio_file_empty", message)
@@ -1024,7 +1024,7 @@ class TaskManager:
         max_attempts = max_retries + 1
         for attempt in range(1, max_attempts + 1):
             await self._raise_if_cancelled(record)
-            retry_label = f"第 {attempt - 1}/{max_retries} 次重试" if attempt > 1 else "首次请求"
+            retry_label = f"第{attempt - 1}/{max_retries}次重试" if attempt > 1 else "首次请求"
             part_label = f"{Path(part.filename).stem} / {total}"
             record.current_item = part_label
             try:
@@ -1035,12 +1035,12 @@ class TaskManager:
             self._add_log(
                 record,
                 "info",
-                f"当前处理 {part_label}（{retry_label}，本地切片大小 {size_bytes} bytes / {size_mb:.2f} MB）",
+                f"当前处理{part_label}（{retry_label}，本地切片大小{size_bytes} bytes / {size_mb:.2f} MB）",
             )
             self._add_log(
                 record,
                 "info",
-                f"{part.filename} 转写链路：{describe_transcription_route(part.path, record.transcription_model_config)}",
+                f"{part.filename}转写链路：{describe_transcription_route(part.path, record.transcription_model_config)}",
             )
             try:
                 text = await transcribe_mp3(
@@ -1054,18 +1054,18 @@ class TaskManager:
                     self._add_log(
                         record,
                         "warning",
-                        f"{part.filename} 转写失败：{safe_message}；3 秒后自动重试（{attempt}/{max_retries}）",
+                        f"{part.filename}转写失败：{safe_message}；3秒后自动重试（{attempt}/{max_retries}）",
                     )
                     await self._sleep_or_cancel(record, 3)
                     continue
-                message = f"{part.filename} 已自动重试 {max_retries} 次仍失败：{safe_message}"
+                message = f"{part.filename}已自动重试{max_retries}次仍失败：{safe_message}"
                 self._add_log(record, "error", message)
                 raise TranscriptionProcessingError(exc.code, message) from exc
 
-            self._add_log(record, "info", f"{part.filename} 转写成功，模型返回正文长度 {len(text)} 字")
+            self._add_log(record, "info", f"{part.filename}转写成功，模型返回正文长度{len(text)}字")
             return text
 
-        raise TranscriptionProcessingError("transcription_unknown_error", f"{part.filename} 转写失败。")
+        raise TranscriptionProcessingError("transcription_unknown_error", f"{part.filename}转写失败。")
 
     def _merge_audio_transcripts(self, audio_parts: list[AudioPart], transcript_by_index: dict[int, str]) -> str:
         ordered = sorted(audio_parts, key=lambda item: item.index)
@@ -1107,7 +1107,7 @@ class TaskManager:
         return "".join(chars), positions
 
     def _build_stage6_markdown(self, result: TaskResult, audio_parts: list[AudioPart]) -> str:
-        audio_summary = "未切片，单段 MP3 已转写" if len(audio_parts) == 1 else f"{len(audio_parts)} 段 MP3 已按顺序转写并合并"
+        audio_summary = "未切片，单段MP3已转写" if len(audio_parts) == 1 else f"{len(audio_parts)}段MP3已按顺序转写并合并"
         if result.source_type == "local_upload":
             source_lines = (
                 f"- 本地文件：{result.title}\n"
@@ -1116,16 +1116,16 @@ class TaskManager:
         else:
             source_lines = (
                 f"- 视频标题：{result.title}\n"
-                f"- BV 号：{result.bv_id or '未知'}\n"
+                f"- BV号：{result.bv_id or '未知'}\n"
                 f"- 当前分P：P{result.p_index}\n"
             )
         return (
-            "### 阶段 6 结果\n\n"
+            "### 阶段6结果\n\n"
             f"{source_lines}"
             f"- 音频转写状态：{audio_summary}\n\n"
-            "#### AI 音频转文字稿\n\n"
+            "#### AI音频转文字稿\n\n"
             f"{result.ai_transcript}\n\n"
-            "本轮已完成第一模型音频转文字。阶段 7 的第二模型文稿优化尚未执行。"
+            "本轮已完成音频转文字模型转写。阶段7尚未调用文稿优化模型。"
         )
 
     def _build_markdown_filename(self, result: TaskResult) -> str:
@@ -1150,12 +1150,12 @@ class TaskManager:
         self._add_log(
             record,
             "error",
-            f"阶段 6 暂停：{record.error}。可检查音频转文字模型配置和连接后重做，或返回输入。",
+            f"阶段6暂停：{record.error}。可检查音频转文字模型配置和连接后重做，或返回输入。",
         )
         self._add_log(
             record,
             "info",
-            "阶段 6 暂停后保留字幕等前置结果和 MP3 切片；重做仅重新调用第一模型，返回输入或超时后会自动清理",
+            "阶段6暂停后保留字幕等前置结果和MP3切片；重做仅重新调用音频转文字模型，返回输入或超时后会自动清理",
         )
 
     def _pause_stage7_for_retry(self, record: TaskRecord, exc: RefineProcessingError) -> None:
@@ -1167,14 +1167,14 @@ class TaskManager:
         self._add_log(
             record,
             "error",
-            f"阶段 7 暂停：{record.error}。可检查文稿优化模型配置和连接后重做，或返回输入。",
+            f"阶段7暂停：{record.error}。可检查文稿优化模型配置和连接后重做，或返回输入。",
         )
         self._cleanup_record(record)
         self._clear_secrets(record)
         self._add_log(
             record,
             "info",
-            "阶段 7 暂停后保留字幕和 AI 音频转文字稿；重做仅重新调用第二模型",
+            "阶段7暂停后保留字幕和AI音频转文字稿；重做仅重新调用文稿优化模型",
         )
 
     async def _sleep_or_cancel(self, record: TaskRecord, delay_seconds: float) -> None:
@@ -1247,22 +1247,22 @@ class TaskManager:
             if not cookie_header:
                 raise BilibiliError(
                     BilibiliErrorCode.COOKIE_INVALID,
-                    "当前默认使用精简 B站 Cookie，但本轮没有收到可用凭据。请先按新手引导打开本地 B站登录窗口刷新 Cookie。",
+                    "当前默认使用精简B站Cookie，但本轮没有收到可用凭据。请先按新手引导打开本地B站登录窗口刷新Cookie。",
                 )
             else:
-                self._add_log(record, "info", "已接收精简 B站 Cookie；后端仅在本机当前任务中使用，不写入日志或后端持久文件")
+                self._add_log(record, "info", "已接收精简B站Cookie；后端仅在本机当前任务中使用，不写入日志或后端持久文件")
 
         if mode == BilibiliAccessMode.COOKIES_FILE:
             if not cookies_content:
                 raise BilibiliError(
                     BilibiliErrorCode.COOKIE_INVALID,
-                    "已选择 cookies.txt 导入模式，但没有选择 cookies.txt 文件。",
+                    "已选择cookies.txt导入模式，但没有选择cookies.txt文件。",
                 )
             if not record.temp_dir:
-                raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "任务临时目录未就绪，无法使用 cookies.txt")
+                raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "任务临时目录未就绪，无法使用cookies.txt")
             cookies_file_path = record.temp_dir / "bilibili-cookies.txt"
             cookies_file_path.write_text(cookies_content, encoding="utf-8")
-            self._add_log(record, "info", "已接收 cookies.txt，仅写入本次任务临时目录，任务结束后清理")
+            self._add_log(record, "info", "已接收cookies.txt，仅写入本次任务临时目录，任务结束后清理")
 
         return BilibiliAccessConfig(
             mode=mode,
@@ -1295,20 +1295,20 @@ class TaskManager:
 
     def _access_config_label(self, config: BilibiliAccessConfig) -> str:
         if config.mode == BilibiliAccessMode.AUTO:
-            return "自动（尝试 B站 API、播放器 API、WBI、HTML 回退、yt-dlp 字幕路径；失败后再尝试本地 Profile）"
+            return "自动（尝试B站API、播放器API、WBI、HTML回退、yt-dlp字幕路径；失败后再尝试本地Profile）"
         if config.mode == BilibiliAccessMode.BROWSER_COOKIE:
-            return f"浏览器 Cookie（{self._browser_label(config.browser)}，优先使用凭据路径）"
+            return f"浏览器Cookie（{self._browser_label(config.browser)}，优先使用凭据路径）"
         if config.mode == BilibiliAccessMode.COOKIES_FILE:
-            return "cookies.txt 导入（优先使用凭据路径，Cookie 文件仅用于本次任务）"
+            return "cookies.txt导入（优先使用凭据路径，Cookie文件仅用于本次任务）"
         if config.mode == BilibiliAccessMode.COOKIE_HEADER:
-            return "精简 Cookie（前端保存到 IndexedDB，后端仅本机任务使用）"
+            return "精简Cookie（前端保存到IndexedDB，后端仅本机任务使用）"
         if config.mode == BilibiliAccessMode.LOCAL_BROWSER_PROFILE:
-            return "本地专用浏览器 Profile（优先使用登录态路径，登录态仅保存在本机）"
+            return "本地专用浏览器Profile（优先使用登录态路径，登录态仅保存在本机）"
         labels = {
             BilibiliAccessMode.ANONYMOUS: "标准匿名请求",
             BilibiliAccessMode.ENHANCED_HEADERS: "增强请求头",
-            BilibiliAccessMode.BILIBILI_API: "B站公开 API",
-            BilibiliAccessMode.IMPERSONATE: "Chrome 指纹模拟",
+            BilibiliAccessMode.BILIBILI_API: "B站公开API",
+            BilibiliAccessMode.IMPERSONATE: "Chrome指纹模拟",
         }
         return labels.get(config.mode, config.mode.value)
 
@@ -1360,7 +1360,7 @@ class TaskManager:
         self._log_subtitle_debug(record, f"selectedCid={video_info.raw_info.get('cid') or '未知'}")
         self._log_subtitle_debug(record, f"selectedPart={self._selected_part_title(video_info)}")
         part_count = len(video_info.parts)
-        self._add_log(record, "info", f"识别到 {part_count} 个分P或子任务候选")
+        self._add_log(record, "info", f"识别到{part_count}个分P或子任务候选")
         if part_count > 1:
             self._add_log(record, "warning", "本阶段仅处理当前分P；多P子任务结构已保留，后续阶段继续接入")
 
@@ -1426,7 +1426,7 @@ class TaskManager:
 
     def _log_audio_parts(self, record: TaskRecord, audio_parts: list[object]) -> None:
         part_count = len(audio_parts)
-        self._add_log(record, "info", f"音频切片处理完成：共 {part_count} 段")
+        self._add_log(record, "info", f"音频切片处理完成：共{part_count}段")
         for part in audio_parts:
             start = self._format_duration(getattr(part, "start_seconds", None))
             end = self._format_duration(getattr(part, "end_seconds", None))
@@ -1436,7 +1436,7 @@ class TaskManager:
             self._add_log(
                 record,
                 "info",
-                f"切片 {filename}：开始={start}，结束={end}，时长={duration}，与上一段重合={overlap}",
+                f"切片{filename}：开始={start}，结束={end}，时长={duration}，与上一段重合={overlap}",
             )
 
     def _build_video_metadata_result(
@@ -1463,14 +1463,14 @@ class TaskManager:
     ) -> TaskResult:
         kind_label = {"video": "视频", "audio": "音频"}.get(media_kind, "音视频")
         title = Path(filename).stem or filename
-        audio_summary = "未切片，登记为单段 MP3" if len(audio_parts) == 1 else f"已切为 {len(audio_parts)} 段 MP3"
+        audio_summary = "未切片，登记为单段MP3" if len(audio_parts) == 1 else f"已切为{len(audio_parts)}段MP3"
         part_lines = "\n".join(
             (
                 f"- {part.get('filename')}: "
                 f"{self._format_duration(part.get('startSeconds'))}-"
                 f"{self._format_duration(part.get('endSeconds'))}，"
-                f"时长 {self._format_duration(part.get('durationSeconds'))}，"
-                f"重合 {self._format_duration(part.get('overlapSeconds'))}"
+                f"时长{self._format_duration(part.get('durationSeconds'))}，"
+                f"重合{self._format_duration(part.get('overlapSeconds'))}"
             )
             for part in audio_parts
         )
@@ -1478,13 +1478,13 @@ class TaskManager:
             "### 本地文件预处理结果\n\n"
             f"- 文件名：{filename}\n"
             f"- 文件类型：本地{kind_label}\n"
-            f"- MP3 校验时长：{self._format_duration(mp3_duration_seconds)}\n"
+            f"- MP3校验时长：{self._format_duration(mp3_duration_seconds)}\n"
             "- 字幕状态：本地上传文件没有原生字幕，已跳过字幕提取\n"
             f"- 音频状态：{audio_summary}\n\n"
             "#### 音频片段\n\n"
             f"{part_lines or '- 暂无片段'}\n\n"
-            "本轮已完成本地文件读取、FFmpeg MP3 转换和切片文件准备。"
-            "后续将直接使用 AI 音频转文字稿进行文稿优化。"
+            "本轮已完成本地文件读取、FFmpeg MP3转换和切片文件准备。"
+            "后续将直接使用AI音频转文字稿进行文稿优化。"
         )
         return TaskResult(
             source_type="local_upload",
@@ -1494,7 +1494,7 @@ class TaskManager:
             subtitle_source="local_upload_placeholder",
             final_markdown=final_markdown,
             clean_subtitle=LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
-            ai_transcript="本地文件已准备为 MP3 或 MP3 切片，等待 AI 音频转文字。",
+            ai_transcript="本地文件已准备为MP3或MP3切片，等待AI音频转文字。",
             filename="local-media-audio-processing-result.md",
             audio_parts=audio_parts,
         )
@@ -1509,31 +1509,31 @@ class TaskManager:
         mp3_duration_seconds: float,
         audio_parts: list[dict[str, object]],
     ) -> TaskResult:
-        subtitle_summary = "已获取并清理 B站自带字幕" if clean_subtitle else "已按用户选择跳过字幕"
-        audio_summary = "未切片，登记为单段 MP3" if len(audio_parts) == 1 else f"已切为 {len(audio_parts)} 段 MP3"
+        subtitle_summary = "已获取并清理B站自带字幕" if clean_subtitle else "已按用户选择跳过字幕"
+        audio_summary = "未切片，登记为单段MP3" if len(audio_parts) == 1 else f"已切为{len(audio_parts)}段MP3"
         part_lines = "\n".join(
             (
                 f"- {part.get('filename')}: "
                 f"{self._format_duration(part.get('startSeconds'))}-"
                 f"{self._format_duration(part.get('endSeconds'))}，"
-                f"时长 {self._format_duration(part.get('durationSeconds'))}，"
-                f"重合 {self._format_duration(part.get('overlapSeconds'))}"
+                f"时长{self._format_duration(part.get('durationSeconds'))}，"
+                f"重合{self._format_duration(part.get('overlapSeconds'))}"
             )
             for part in audio_parts
         )
         final_markdown = (
-            "### 阶段 5 结果\n\n"
+            "### 阶段5结果\n\n"
             f"- 视频标题：{video_info.title}\n"
-            f"- BV 号：{video_info.bv_id or '未知'}\n"
+            f"- BV号：{video_info.bv_id or '未知'}\n"
             f"- 当前分P：P{video_info.p_index}\n"
             f"- 视频时长：{self._format_duration(video_info.duration_seconds)}\n"
-            f"- MP3 校验时长：{self._format_duration(mp3_duration_seconds)}\n"
+            f"- MP3校验时长：{self._format_duration(mp3_duration_seconds)}\n"
             f"- 字幕状态：{subtitle_summary}\n"
             f"- 音频状态：{audio_summary}\n\n"
             "#### 音频片段\n\n"
             f"{part_lines or '- 暂无片段'}\n\n"
-            "本轮已完成 playurl 主路径音频下载、MP3 转换和切片文件准备。"
-            "阶段 6 将在同一任务中继续消费这些临时音频片段。"
+            "本轮已完成playurl主路径音频下载、MP3转换和切片文件准备。"
+            "阶段6将在同一任务中继续消费这些临时音频片段。"
         )
         return TaskResult(
             title=video_info.title,
@@ -1545,8 +1545,8 @@ class TaskManager:
             subtitle_language=subtitle_language,
             subtitle_source=subtitle_source,
             final_markdown=final_markdown,
-            clean_subtitle=clean_subtitle or "用户已选择跳过字幕，后续阶段将仅依赖 AI 音频转文字稿。",
-            ai_transcript="阶段 5 已准备 MP3 或 MP3 切片，等待阶段 6 音频转文字。",
+            clean_subtitle=clean_subtitle or "用户已选择跳过字幕，后续阶段将仅依赖AI音频转文字稿。",
+            ai_transcript="阶段5已准备MP3或MP3切片，等待阶段6音频转文字。",
             filename="stage-5-audio-processing-result.md",
             audio_parts=audio_parts,
             sub_tasks=[self._part_to_dict(part) for part in video_info.parts],
@@ -1560,16 +1560,16 @@ class TaskManager:
         subtitle_language: str,
         subtitle_source: str,
     ) -> TaskResult:
-        subtitle_summary = "已获取并清理 B站自带字幕" if clean_subtitle else "已按用户选择跳过字幕"
+        subtitle_summary = "已获取并清理B站自带字幕" if clean_subtitle else "已按用户选择跳过字幕"
         final_markdown = (
-            "### 阶段 4 结果\n\n"
+            "### 阶段4结果\n\n"
             f"- 视频标题：{video_info.title}\n"
-            f"- BV 号：{video_info.bv_id or '未知'}\n"
+            f"- BV号：{video_info.bv_id or '未知'}\n"
             f"- 当前分P：P{video_info.p_index}\n"
             f"- 视频时长：{self._format_duration(video_info.duration_seconds)}\n"
             f"- 字幕状态：{subtitle_summary}\n\n"
-            "本轮已完成 B站输入解析、视频信息获取、字幕获取与字幕清理。"
-            "音频下载、MP3 转换、切片和模型转写属于后续阶段，本阶段未提前实现。"
+            "本轮已完成B站输入解析、视频信息获取、字幕获取与字幕清理。"
+            "音频下载、MP3转换、切片和模型转写属于后续阶段，本阶段未提前实现。"
         )
         return TaskResult(
             title=video_info.title,
@@ -1581,8 +1581,8 @@ class TaskManager:
             subtitle_language=subtitle_language,
             subtitle_source=subtitle_source,
             final_markdown=final_markdown,
-            clean_subtitle=clean_subtitle or "用户已选择跳过字幕，后续阶段将仅依赖 AI 音频转文字稿。",
-            ai_transcript="阶段 4 未执行音频转文字，阶段 6 将接入。",
+            clean_subtitle=clean_subtitle or "用户已选择跳过字幕，后续阶段将仅依赖AI音频转文字稿。",
+            ai_transcript="阶段4未执行音频转文字，阶段6将接入。",
             filename="stage-4-bilibili-subtitle-result.md",
             sub_tasks=[self._part_to_dict(part) for part in video_info.parts],
         )
@@ -1609,17 +1609,17 @@ class TaskManager:
 
     def _subtitle_source_label(self, source: str) -> str:
         labels = {
-            "uploaded": "UP 主上传字幕",
+            "uploaded": "UP主上传字幕",
             "automatic": "B站自动字幕",
-            "requested": "yt-dlp 选中字幕",
+            "requested": "yt-dlp选中字幕",
             "player_api": "B站播放器字幕接口",
-            "player_wbi_api": "B站播放器 wbi 字幕接口",
-            "player_wbi_api_ep": "B站播放器 wbi 字幕接口（ep_id）",
-            "player_wbi_api_profile": "B站播放器 wbi 字幕接口（页面内 fetch）",
-            "player_wbi_api_ep_profile": "B站播放器 wbi 字幕接口（ep_id 页面内 fetch）",
-            "player_wbi_signed_api": "WBI 签名播放器字幕接口",
-            "html_initial_state": "HTML 初始化数据回退",
-            "yt_dlp_subtitle": "yt-dlp 字幕路径",
+            "player_wbi_api": "B站播放器wbi字幕接口",
+            "player_wbi_api_ep": "B站播放器wbi字幕接口（ep_id）",
+            "player_wbi_api_profile": "B站播放器wbi字幕接口（页面内fetch）",
+            "player_wbi_api_ep_profile": "B站播放器wbi字幕接口（ep_id页面内fetch）",
+            "player_wbi_signed_api": "WBI签名播放器字幕接口",
+            "html_initial_state": "HTML初始化数据回退",
+            "yt_dlp_subtitle": "yt-dlp字幕路径",
         }
         return labels.get(source, source or "未知字幕")
 

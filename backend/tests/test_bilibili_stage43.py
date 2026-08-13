@@ -164,12 +164,12 @@ def test_open_login_window_surfaces_worker_startup_error(monkeypatch, tmp_path):
 
     def fail_startup(session_token):
         session = browser_profile._ACTIVE_LOGIN_SESSIONS[session_token]
-        session.error = "模拟 Chromium 启动失败"
+        session.error = "模拟Chromium启动失败"
         session.startup_ready.set()
 
     monkeypatch.setattr(browser_profile, "_run_login_window", fail_startup)
 
-    with pytest.raises(RuntimeError, match="模拟 Chromium 启动失败"):
+    with pytest.raises(RuntimeError, match="模拟Chromium启动失败"):
         browser_profile.open_login_window()
 
     assert not browser_profile._ACTIVE_LOGIN_SESSIONS

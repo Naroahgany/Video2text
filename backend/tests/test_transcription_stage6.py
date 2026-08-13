@@ -147,13 +147,13 @@ def test_audio_transcription_payload_forces_streaming_even_if_config_stream_is_f
 
 
 def test_refine_prompt_reuses_existing_four_segment_structure():
-    prompt = build_refine_transcript_prompt("", "AI 音频转写正文")
+    prompt = build_refine_transcript_prompt("", "AI音频转写正文")
 
     assert prompt.count("<YourTask>") == 2
     assert prompt.count("</YourTask>") == 2
     assert prompt.count(REFINE_TRANSCRIPT_TASK_PROMPT) == 2
     assert f"<OriginalSubtitleContent>\n{NO_SUBTITLE_PLACEHOLDER}\n</OriginalSubtitleContent>" in prompt
-    assert "<AIAudioTranscriptionResult>\nAI 音频转写正文\n</AIAudioTranscriptionResult>" in prompt
+    assert "<AIAudioTranscriptionResult>\nAI音频转写正文\n</AIAudioTranscriptionResult>" in prompt
     assert prompt.endswith(REFINE_FINISH_INSTRUCTION)
     assert REFINE_FINISH_MARKER in prompt
 
@@ -161,15 +161,15 @@ def test_refine_prompt_reuses_existing_four_segment_structure():
 def test_refine_prompt_keeps_unified_subtitle_block_for_local_uploads():
     prompt = build_refine_transcript_prompt(
         LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER,
-        "本地文件的 AI 音频转写正文",
+        "本地文件的AI音频转写正文",
     )
 
     assert f"<OriginalSubtitleContent>\n{LOCAL_UPLOAD_NO_SUBTITLE_PLACEHOLDER}\n</OriginalSubtitleContent>" in prompt
-    assert "<AIAudioTranscriptionResult>\n本地文件的 AI 音频转写正文\n</AIAudioTranscriptionResult>" in prompt
+    assert "<AIAudioTranscriptionResult>\n本地文件的AI音频转写正文\n</AIAudioTranscriptionResult>" in prompt
 
 
 def test_refine_continuation_prompt_includes_truncation_anchor_after_finish_instruction():
-    prompt = build_refine_transcript_prompt("", "AI 音频转写正文", continuation_anchor="最后一段话")
+    prompt = build_refine_transcript_prompt("", "AI音频转写正文", continuation_anchor="最后一段话")
 
     assert REFINE_FINISH_INSTRUCTION in prompt
     assert "你刚刚的输出内容被截断了" in prompt
@@ -186,7 +186,7 @@ def test_refine_chat_payload_defaults_to_streaming_chat_completions():
             temperature=0.2,
             stream=True,
         ),
-        "阶段 7 prompt",
+        "阶段7 prompt",
     )
 
     assert payload == {
@@ -196,7 +196,7 @@ def test_refine_chat_payload_defaults_to_streaming_chat_completions():
         "messages": [
             {
                 "role": "user",
-                "content": "阶段 7 prompt",
+                "content": "阶段7 prompt",
             },
         ],
     }
@@ -417,7 +417,7 @@ def test_legacy_gemini_providers_route_to_files_api(tmp_path):
                 provider=provider,
             ),
         )
-        assert route == "AIStudioToAPI Gemini 原生 Files API"
+        assert route == "AIStudioToAPI Gemini原生Files API"
 
 
 def test_merge_transcripts_trims_reliable_overlap():
@@ -471,7 +471,7 @@ def test_stage6_rejects_zero_byte_mp3(tmp_path):
         _validate_mp3_audio_path(audio_path)
 
     assert exc_info.value.code == "transcription_audio_file_empty"
-    assert "文件大小为 0" in exc_info.value.message
+    assert "文件大小为0" in exc_info.value.message
 
 
 def test_gemini_upload_response_requires_file_uri():
@@ -483,7 +483,7 @@ def test_gemini_upload_response_requires_file_uri():
         )
 
     assert exc_info.value.code == "transcription_gemini_upload_failed"
-    assert "缺少 file.uri" in exc_info.value.message
+    assert "缺少file.uri" in exc_info.value.message
 
 
 def test_gemini_upload_response_requires_active_state():
@@ -502,7 +502,7 @@ def test_gemini_upload_response_requires_active_state():
         )
 
     assert exc_info.value.code == "transcription_gemini_upload_failed"
-    assert "不是 ACTIVE" in exc_info.value.message
+    assert "不是ACTIVE" in exc_info.value.message
 
 
 def test_gemini_upload_response_requires_matching_size_bytes():
@@ -540,7 +540,7 @@ def test_gemini_upload_response_requires_reasonable_mime_type():
         )
 
     assert exc_info.value.code == "transcription_gemini_upload_failed"
-    assert "mimeType 不合理" in exc_info.value.message
+    assert "mimeType不合理" in exc_info.value.message
 
 
 def test_gemini_upload_response_accepts_small_size_tolerance():

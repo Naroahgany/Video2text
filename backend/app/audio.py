@@ -114,7 +114,7 @@ async def fetch_playurl_audio_stream(
     if not cid or not bvid:
         raise AudioProcessingError(
             "audio_playurl_missing_identity",
-            "阶段 5A playurl 主路径缺少 bvid 或 cid，无法请求音频地址。",
+            "阶段5A playurl主路径缺少bvid或cid，无法请求音频地址。",
         )
 
     params: dict[str, object] = {
@@ -134,34 +134,34 @@ async def fetch_playurl_audio_stream(
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(PLAYURL_ENDPOINT, params=params, headers=headers, cookies=cookies)
     except httpx.TimeoutException as exc:
-        raise AudioProcessingError("audio_playurl_timeout", "B站 playurl 音频地址获取超时。") from exc
+        raise AudioProcessingError("audio_playurl_timeout", "B站playurl音频地址获取超时。") from exc
     except BilibiliError as exc:
         raise AudioProcessingError(exc.code.value, exc.message) from exc
     except httpx.RequestError as exc:
         raise AudioProcessingError(
             "audio_playurl_request_failed",
-            f"B站 playurl 音频地址获取失败：{_sanitize_external_message(exc)}",
+            f"B站playurl音频地址获取失败：{_sanitize_external_message(exc)}",
         ) from exc
 
     if response.status_code >= 400:
-        error = _map_http_status(response.status_code, "playurl 音频主路径")
+        error = _map_http_status(response.status_code, "playurl音频主路径")
         raise AudioProcessingError(error.code.value, error.message)
 
     try:
         payload = response.json()
     except ValueError as exc:
-        raise AudioProcessingError("audio_playurl_invalid_json", "playurl 音频主路径返回内容不是有效 JSON。") from exc
+        raise AudioProcessingError("audio_playurl_invalid_json", "playurl音频主路径返回内容不是有效JSON。") from exc
 
     code = payload.get("code") if isinstance(payload, dict) else None
     if code != 0:
-        message = str(payload.get("message") or "playurl 音频主路径返回异常") if isinstance(payload, dict) else "playurl 音频主路径返回异常"
+        message = str(payload.get("message") or "playurl音频主路径返回异常") if isinstance(payload, dict) else "playurl音频主路径返回异常"
         raise _playurl_payload_error(code, message)
 
     audio_streams = _extract_dash_audio_streams(payload)
     if not audio_streams:
         raise AudioProcessingError(
             "audio_playurl_no_audio",
-            "playurl 主路径没有返回 data.dash.audio，未下载任何视频画面或后备路径。",
+            "playurl主路径没有返回data.dash.audio，未下载任何视频画面或后备路径。",
         )
     return _select_audio_stream(audio_streams)
 
@@ -185,7 +185,7 @@ async def download_audio_stream(
         for index, url in enumerate(stream.urls, start=1):
             if not url:
                 continue
-            _emit(log, f"开始下载音频流：playurl 第 {index} 个候选，streamId={stream.audio_id or '未知'}")
+            _emit(log, f"开始下载音频流：playurl第{index}个候选，streamId={stream.audio_id or '未知'}")
             try:
                 bytes_written = await _download_url_to_file(client, url, output_path, headers, cookies)
             except AudioProcessingError as exc:
@@ -193,12 +193,12 @@ async def download_audio_stream(
                 _emit(log, f"音频流候选下载失败：{exc.message}")
                 continue
             if bytes_written > 0:
-                _emit(log, f"音频下载完成：已写入 {bytes_written} 字节到任务临时目录")
+                _emit(log, f"音频下载完成：已写入{bytes_written}字节到任务临时目录")
                 return output_path
             errors.append("下载响应为空")
 
-    summary = "；".join(errors[-3:]) if errors else "没有可用音频 URL"
-    raise AudioProcessingError("audio_download_failed", f"playurl 音频下载失败：{summary}")
+    summary = "；".join(errors[-3:]) if errors else "没有可用音频URL"
+    raise AudioProcessingError("audio_download_failed", f"playurl音频下载失败：{summary}")
 
 
 async def convert_audio_to_mp3(
@@ -208,7 +208,7 @@ async def convert_audio_to_mp3(
 ) -> float:
     """Convert downloaded audio to MP3 and return the verified MP3 duration."""
 
-    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg 不可用，无法转换 MP3。")
+    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg不可用，无法转换MP3。")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     timeout = _ffmpeg_timeout(duration_hint_seconds)
     command = [
@@ -225,7 +225,7 @@ async def convert_audio_to_mp3(
         DEFAULT_MP3_BITRATE,
         str(output_path),
     ]
-    await asyncio.to_thread(_run_subprocess, command, timeout, "mp3_conversion_failed", "MP3 转换失败")
+    await asyncio.to_thread(_run_subprocess, command, timeout, "mp3_conversion_failed", "MP3转换失败")
     return await probe_audio_duration(output_path)
 
 
@@ -246,7 +246,7 @@ async def probe_audio_duration(path: Path) -> float:
 async def _probe_audio_duration_with_ffprobe(path: Path) -> float:
     """Read media duration using ffprobe."""
 
-    ffprobe = _require_binary("ffprobe", "ffmpeg_unavailable", "FFprobe 不可用，无法读取音频时长。")
+    ffprobe = _require_binary("ffprobe", "ffmpeg_unavailable", "FFprobe不可用，无法读取音频时长。")
     command = [
         ffprobe,
         "-v",
@@ -260,14 +260,14 @@ async def _probe_audio_duration_with_ffprobe(path: Path) -> float:
     output = await asyncio.to_thread(_run_subprocess, command, 60, "audio_duration_failed", "音频时长读取失败")
     duration = _read_float(output.strip())
     if duration is None or duration <= 0:
-        raise AudioProcessingError("audio_duration_failed", "音频时长读取失败：FFprobe 返回空时长。")
+        raise AudioProcessingError("audio_duration_failed", "音频时长读取失败：FFprobe返回空时长。")
     return duration
 
 
 async def _probe_audio_duration_with_ffmpeg(path: Path) -> float:
     """Read media duration from ffmpeg banner output when ffprobe is unavailable."""
 
-    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg 不可用，无法读取音频时长。")
+    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg不可用，无法读取音频时长。")
     command = [ffmpeg, "-hide_banner", "-i", str(path)]
     output = await asyncio.to_thread(
         _run_subprocess_allow_failure,
@@ -278,7 +278,7 @@ async def _probe_audio_duration_with_ffmpeg(path: Path) -> float:
     )
     duration = _read_duration_from_ffmpeg_output(output)
     if duration is None or duration <= 0:
-        raise AudioProcessingError("audio_duration_failed", "音频时长读取失败：FFmpeg 未返回可识别时长。")
+        raise AudioProcessingError("audio_duration_failed", "音频时长读取失败：FFmpeg未返回可识别时长。")
     return duration
 
 
@@ -316,7 +316,7 @@ async def split_mp3_by_rule(
             ),
         ]
 
-    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg 不可用，无法切片音频。")
+    ffmpeg = _require_binary("ffmpeg", "ffmpeg_unavailable", "FFmpeg不可用，无法切片音频。")
     parts: list[AudioPart] = []
     for index, (start, end, overlap) in enumerate(specs, start=1):
         part_path = output_dir / f"part_{index:03d}.mp3"
@@ -374,9 +374,9 @@ def calculate_audio_part_specs(
     chunk_seconds = float(target_chunk_minutes) * 60
     overlap_seconds = float(chunk_overlap_minutes) * 60
     if chunk_seconds <= 0:
-        raise AudioProcessingError("audio_split_invalid_config", "切片周期必须大于 0。")
+        raise AudioProcessingError("audio_split_invalid_config", "切片周期必须大于0。")
     if overlap_seconds < 0 or overlap_seconds >= chunk_seconds:
-        raise AudioProcessingError("audio_split_invalid_config", "切片重合时长必须大于等于 0 且小于切片周期。")
+        raise AudioProcessingError("audio_split_invalid_config", "切片重合时长必须大于等于0且小于切片周期。")
 
     if duration <= no_slice_seconds:
         return [(0.0, duration, 0.0)]
@@ -414,7 +414,7 @@ def _extract_dash_audio_streams(payload: dict[str, Any]) -> list[dict[str, Any]]
 def _select_audio_stream(streams: list[dict[str, Any]]) -> PlayurlAudioStream:
     valid_streams = [item for item in streams if _stream_url(item)]
     if not valid_streams:
-        raise AudioProcessingError("audio_playurl_no_audio_url", "playurl 返回了音频流，但没有可用 baseUrl 或 backupUrl。")
+        raise AudioProcessingError("audio_playurl_no_audio_url", "playurl返回了音频流，但没有可用baseUrl或backupUrl。")
 
     def sort_key(item: dict[str, Any]) -> tuple[int, int]:
         return (_read_int(item.get("bandwidth")) or 0, _read_int(item.get("id")) or 0)
@@ -447,7 +447,7 @@ async def _download_url_to_file(
     try:
         async with client.stream("GET", url, headers=headers, cookies=cookies) as response:
             if response.status_code >= 400:
-                error = _map_http_status(response.status_code, "音频 CDN")
+                error = _map_http_status(response.status_code, "音频CDN")
                 raise AudioProcessingError(error.code.value, error.message)
             bytes_written = 0
             with output_path.open("wb") as handle:
@@ -460,11 +460,11 @@ async def _download_url_to_file(
     except AudioProcessingError:
         raise
     except httpx.TimeoutException as exc:
-        raise AudioProcessingError("audio_download_timeout", "音频 URL 下载超时。") from exc
+        raise AudioProcessingError("audio_download_timeout", "音频URL下载超时。") from exc
     except httpx.RequestError as exc:
         raise AudioProcessingError(
             "audio_download_request_failed",
-            f"音频 URL 下载失败：{_sanitize_external_message(exc)}",
+            f"音频URL下载失败：{_sanitize_external_message(exc)}",
         ) from exc
 
 
@@ -472,13 +472,13 @@ def _playurl_payload_error(code: object, message: str) -> AudioProcessingError:
     if code in {-101, -102} or "登录" in message or "账号" in message:
         return AudioProcessingError(
             "login_required",
-            "playurl 主路径需要有效登录态或精简 Cookie，请重新打开本地 B站登录窗口刷新 Cookie。",
+            "playurl主路径需要有效登录态或精简Cookie，请重新打开本地B站登录窗口刷新Cookie。",
         )
     if code in {-403, 403} or "权限" in message or "付费" in message or "会员" in message:
-        return AudioProcessingError("bilibili_http_403", "该视频可能需要付费、会员或受限权限，MVP 暂不支持。")
+        return AudioProcessingError("bilibili_http_403", "该视频可能需要付费、会员或受限权限，MVP暂不支持。")
     if code in {-404, 404}:
         return AudioProcessingError(BilibiliErrorCode.VIDEO_UNAVAILABLE.value, "B站视频不存在或无法访问。")
-    return AudioProcessingError("audio_playurl_bilibili_error", f"playurl 主路径返回异常：{message}")
+    return AudioProcessingError("audio_playurl_bilibili_error", f"playurl主路径返回异常：{message}")
 
 
 def _audio_headers(video_info: BilibiliVideoInfo) -> dict[str, str]:
@@ -548,9 +548,9 @@ def _run_subprocess(command: list[str], timeout: int, code: str, message: str) -
             marker in lowered_detail
             for marker in ("output file does not contain any stream", "matches no streams")
         ):
-            raise AudioProcessingError("audio_stream_missing", "输入文件中未检测到可用的音频轨，无法转换为 MP3。")
+            raise AudioProcessingError("audio_stream_missing", "输入文件中未检测到可用的音频轨，无法转换为MP3。")
         detail = _sanitize_external_message(raw_detail)
-        raise AudioProcessingError(code, f"{message}：{detail or 'FFmpeg 返回非 0 状态。'}")
+        raise AudioProcessingError(code, f"{message}：{detail or 'FFmpeg返回非0状态。'}")
     return completed.stdout or ""
 
 

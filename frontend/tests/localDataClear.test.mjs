@@ -38,7 +38,7 @@ globalThis.indexedDB = {
 
 const { clearAllLocalData } = await import("../src/db.js");
 
-test("清空本地数据会同时清除设置、精简 Cookie 和历史记录所在存储", async () => {
+test("清空本地数据会同时清除设置、精简Cookie和历史记录所在存储", async () => {
   await clearAllLocalData();
 
   assert.deepEqual([...clearedStores].sort(), ["history", "settings"]);

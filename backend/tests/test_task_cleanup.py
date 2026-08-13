@@ -107,7 +107,7 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
 
             manager._pause_stage7_for_retry(
                 record,
-                RefineProcessingError("refine_api_error", "第二模型暂时不可用"),
+                RefineProcessingError("refine_api_error", "文稿优化模型暂时不可用"),
             )
 
             self.assertEqual(record.status, TaskStatus.WAITING_MODEL_RETRY)
@@ -215,7 +215,7 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
             calls: list[str] = []
 
             async def fake_stage4(_manager: TaskManager, current: TaskRecord) -> None:
-                self.fail("音频转文字重做不应重新执行阶段 4")
+                self.fail("音频转文字重做不应重新执行阶段4")
 
             async def fake_stage6(_manager: TaskManager, current: TaskRecord) -> None:
                 calls.append("stage6")
@@ -247,7 +247,7 @@ class TaskManagerCleanupTests(unittest.IsolatedAsyncioTestCase):
         calls: list[str] = []
 
         async def fail_stage6(_manager: TaskManager, _current: TaskRecord) -> None:
-            self.fail("文稿优化重做不应重新执行阶段 6")
+            self.fail("文稿优化重做不应重新执行阶段6")
 
         async def fake_stage7(_manager: TaskManager, current: TaskRecord) -> None:
             calls.append("stage7")

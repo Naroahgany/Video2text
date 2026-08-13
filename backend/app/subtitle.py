@@ -136,7 +136,7 @@ def _extract_json_lines(raw: str) -> list[str]:
     except json.JSONDecodeError as exc:
         raise SubtitleProcessingError(
             SubtitleErrorCode.FORMAT_UNRECOGNIZED,
-            "字幕 JSON 格式无法解析",
+            "字幕JSON格式无法解析",
         ) from exc
 
     rows = _json_rows(payload)

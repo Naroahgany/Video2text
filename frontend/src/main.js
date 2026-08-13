@@ -683,10 +683,10 @@ function retryableModelKind(task) {
 
 function modelRetrySuggestion(kind) {
   if (kind === "transcription") {
-    return "建议：请检查音频转文字模型的 API Base URL、API Key、模型名称和识别方式是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
+    return "建议：请检查音频转文字模型的API Base URL、API Key、模型名称和识别方式是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
   }
   if (kind === "refine") {
-    return "建议：请检查文稿优化模型的 API Base URL、API Key 和模型名称是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
+    return "建议：请检查文稿优化模型的API Base URL、API Key和模型名称是否设置正确，并确认该模型服务可以成功连接；检查后点击“重做”。";
   }
   return "";
 }
@@ -716,7 +716,7 @@ function renderTask() {
     task.status === "canceled"
       ? "任务已取消，可以返回输入态或直接重新提交。"
       : task.status === "abandoned"
-        ? "任务长时间未轮询，已被标记为 abandoned。"
+        ? "任务长时间未轮询，已被标记为abandoned。"
         : task.status === "waiting_model_retry"
           ? "模型调用已暂停，检查相关设置和连接后可以重做。"
         : "";
@@ -799,7 +799,7 @@ function showTranscriptionRetryModal(message) {
     return;
   }
   elements.transcriptionRetryErrorText.textContent =
-    message || "第一模型音频转文字失败，可以重试或更换模型配置后重新尝试阶段 6。";
+    message || "音频转文字模型转写失败，可以重试或更换模型配置后重新尝试阶段6。";
   elements.transcriptionRetryModal.hidden = false;
 }
 
@@ -834,7 +834,7 @@ function setCredentialStatus(message) {
   }
 }
 
-function showCredentialGuide(message = "请先初始化精简 B站 Cookie。") {
+function showCredentialGuide(message = "请先初始化精简B站Cookie。") {
   bilibiliCredentialReady = false;
   if (elements.workflowShell) {
     elements.workflowShell.hidden = true;
@@ -854,7 +854,7 @@ function hideCredentialGuide() {
   }
 }
 
-function unlockCredentialGate(message = "精简 B站 Cookie 已准备好。") {
+function unlockCredentialGate(message = "精简B站Cookie已准备好。") {
   bilibiliCredentialReady = true;
   if (elements.credentialModal) {
     elements.credentialModal.hidden = true;
@@ -868,7 +868,7 @@ function unlockCredentialGate(message = "精简 B站 Cookie 已准备好。") {
 async function persistSimplifiedCookie(rawCookie, { reflectToUi = true } = {}) {
   const summary = summarizeBilibiliCookie(rawCookie);
   if (!summary.cookieHeader) {
-    throw new Error("未找到 6 项白名单内的 B站 Cookie，请重新登录或粘贴包含 SESSDATA 的 Cookie。");
+    throw new Error("未找到6项白名单内的B站Cookie，请重新登录或粘贴包含SESSDATA的Cookie。");
   }
 
   const browser = elements.bilibiliCookieBrowser?.value || "chrome";
@@ -901,7 +901,7 @@ async function ensureBilibiliCredentialReady() {
   );
   if (!cookieHeader) {
     showCredentialGuide(
-      "未检测到精简 B站 Cookie，请先完成登录初始化；如需处理本地文件，可关闭此窗口后点击 + 上传。",
+      "未检测到精简B站Cookie，请先完成登录初始化；如需处理本地文件，可关闭此窗口后点击 + 上传。",
     );
     return;
   }
@@ -913,7 +913,7 @@ async function ensureBilibiliCredentialReady() {
     }
   }
 
-  unlockCredentialGate("已检测到本地 Cookie。若后续任务提示失效，可在设置中点击“重新获取”。");
+  unlockCredentialGate("已检测到本地Cookie。若后续任务提示失效，可在设置中点击“重新获取”。");
 }
 
 function log(level, message) {
@@ -969,7 +969,7 @@ function applyTaskResponse(payload) {
 
   if (shouldPromptCredentialRefresh(payload)) {
     showCredentialGuide(
-      payload.error || "B站 Cookie 失效、HTTP 412、未登录或风控，请重新打开本地 B站登录窗口刷新 Cookie。",
+      payload.error || "B站Cookie失效、HTTP 412、未登录或风控，请重新打开本地B站登录窗口刷新Cookie。",
     );
   } else if (shouldOfferSubtitleSkip(payload)) {
     showSubtitleFailureModal(payload.error);
@@ -1109,7 +1109,7 @@ async function refreshHealth() {
     const result = await fetchHealth();
     setHealthState({
       status: "ok",
-      message: `${result.service} 已连接`,
+      message: `${result.service}已连接`,
     });
   } catch (error) {
     setHealthState({
@@ -1243,7 +1243,7 @@ async function saveConfig(form) {
   const config = readModelForm(form);
   await saveModelConfig(kind, config);
   elements.configStatus.textContent = "已保存";
-  log("info", `${modelLabels[kind]}配置已保存到 IndexedDB`);
+  log("info", `${modelLabels[kind]}配置已保存到IndexedDB`);
 }
 
 async function loadModels(form) {
@@ -1251,8 +1251,8 @@ async function loadModels(form) {
   const config = readModelForm(form);
 
   if (!config.baseUrl || !config.apiKey) {
-    elements.configStatus.textContent = "请先填写 API Base URL 和 API Key";
-    log("warning", `${modelLabels[kind]}需要先填写 API Base URL 和 API Key`);
+    elements.configStatus.textContent = "请先填写API Base URL和API Key";
+    log("warning", `${modelLabels[kind]}需要先填写API Base URL和API Key`);
     return;
   }
 
@@ -1263,8 +1263,8 @@ async function loadModels(form) {
   try {
     const models = await fetchModelList(config);
     populateModelOptions(form, models);
-    elements.configStatus.textContent = `已加载 ${models.length} 个模型`;
-    log("info", `${modelLabels[kind]}返回 ${models.length} 个模型`);
+    elements.configStatus.textContent = `已加载 ${models.length}个模型`;
+    log("info", `${modelLabels[kind]}返回 ${models.length}个模型`);
   } catch (error) {
     elements.configStatus.textContent = "模型列表获取失败";
     log("error", error instanceof Error ? error.message : "模型列表获取失败");
@@ -1340,10 +1340,10 @@ async function handleExtractBilibiliCookie() {
     const payload = await extractBilibiliCookieFromProfile(bilibiliCredentialSessionToken);
     bilibiliCredentialSessionToken = "";
     await persistSimplifiedCookie(payload.cookie_header);
-    unlockCredentialGate("精简 B站 Cookie 已提取并保存。");
-    log("info", "精简 B站 Cookie 已保存到 IndexedDB");
+    unlockCredentialGate("精简B站Cookie已提取并保存。");
+    log("info", "精简B站Cookie已保存到IndexedDB");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "精简 Cookie 提取失败";
+    const message = error instanceof Error ? error.message : "精简Cookie提取失败";
     showCredentialGuide(message);
     log("error", message);
   } finally {
@@ -1401,7 +1401,7 @@ async function readBilibiliAccessOptions() {
   await saveBilibiliAccessSettingsFromUi();
 
   if (!cookieHeader) {
-    throw new Error("当前需要精简 B站 Cookie，请先按新手引导打开本地 B站登录窗口刷新 Cookie。");
+    throw new Error("当前需要精简B站Cookie，请先按新手引导打开本地B站登录窗口刷新Cookie。");
   }
   if (elements.bilibiliCookieHeader?.value !== cookieHeader) {
     elements.bilibiliCookieHeader.value = cookieHeader;
@@ -1467,7 +1467,7 @@ async function handleCopyMarkdown() {
       button.textContent = "复制失败";
       restoreButtonText(button, defaultText);
     }
-    console.warn(error instanceof Error ? error.message : "复制 Markdown 失败");
+    console.warn(error instanceof Error ? error.message : "复制Markdown失败");
   }
 }
 
@@ -1497,14 +1497,14 @@ async function handleCopyLocalCookie() {
       button.textContent = "复制失败";
       restoreButtonText(button, defaultText);
     }
-    log("error", error instanceof Error ? error.message : "复制本地 Cookie 失败");
+    log("error", error instanceof Error ? error.message : "复制本地Cookie失败");
   }
 }
 
 function handleRefreshLocalCookie() {
   bilibiliCredentialSessionToken = "";
   closeSettings();
-  showCredentialGuide("请重新打开本地 B站登录窗口；登录完成后保持窗口打开，再点击“提取并保存Cookie”。");
+  showCredentialGuide("请重新打开本地B站登录窗口；登录完成后保持窗口打开，再点击“提取并保存Cookie”。");
 }
 
 async function handleClearLocalCookie() {
@@ -1523,7 +1523,7 @@ async function handleClearLocalCookie() {
 async function renderHistory() {
   const searchTerm = elements.historySearch.value;
   const records = await listHistoryRecords(searchTerm);
-  elements.historyCount.textContent = `${records.length} 条`;
+  elements.historyCount.textContent = `${records.length}条`;
   elements.historyList.replaceChildren();
 
   if (!records.length) {
@@ -1723,7 +1723,7 @@ async function resetWorkflow() {
     try {
       await cancelTask(currentTask.taskId);
     } catch (error) {
-      log("warning", error instanceof Error ? error.message : "取消暂停任务失败，后端会在 abandoned 清理入口处理");
+      log("warning", error instanceof Error ? error.message : "取消暂停任务失败，后端会在abandoned清理入口处理");
     }
   }
 
@@ -1794,14 +1794,14 @@ async function submitTask({
   }
 
   if (!parsed) {
-    const message = "用户输入无法解析：未识别到 B站视频链接或 BV 号";
+    const message = "用户输入无法解析：未识别到B站视频链接或BV号";
     elements.inputStatus.textContent = message;
     log("error", message);
     return;
   }
 
   if (!bilibiliCredentialReady) {
-    showCredentialGuide("处理 B站链接前需要本机 B站登录态；如需处理本地文件，可关闭此窗口后点击 + 上传。");
+    showCredentialGuide("处理B站链接前需要本机B站登录态；如需处理本地文件，可关闭此窗口后点击 + 上传。");
     return;
   }
 
@@ -1841,7 +1841,7 @@ async function submitTask({
   renderTask();
   log("info", `已识别输入：${parsed.display}`);
   if (skipSubtitleIfFailed) {
-    log("warning", "已选择跳过 B站字幕，后续流程将仅依赖 AI 音频转文字稿");
+    log("warning", "已选择跳过B站字幕，后续流程将仅依赖AI音频转文字稿");
   }
 
   try {
@@ -2084,8 +2084,8 @@ async function handleRetryTranscription() {
       startPolling(payload.task_id, currentGeneration);
     }
   } catch (error) {
-    showTranscriptionRetryModal(error instanceof Error ? error.message : "阶段 6 重试失败");
-    log("error", error instanceof Error ? error.message : "阶段 6 重试失败");
+    showTranscriptionRetryModal(error instanceof Error ? error.message : "阶段6重试失败");
+    log("error", error instanceof Error ? error.message : "阶段6重试失败");
   }
 }
 
@@ -2107,12 +2107,12 @@ async function handleExport() {
   const data = await exportAllData();
   const date = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   downloadJson(`bilibili-transcription-data-${date}.json`, data);
-  log("info", "已导出 IndexedDB 配置和历史数据");
+  log("info", "已导出IndexedDB配置和历史数据");
 }
 
 async function handleImportFile(file) {
   try {
-    if (!confirm("导入会覆盖当前 IndexedDB 中的模型配置、精简 B站 Cookie 和历史记录。导入文件请只使用你自己的本地备份，确认继续？")) {
+    if (!confirm("导入会覆盖当前IndexedDB中的模型配置、精简B站Cookie和历史记录。导入文件请只使用你自己的本地备份，确认继续？")) {
       return;
     }
     const payload = JSON.parse(await file.text());
@@ -2121,7 +2121,7 @@ async function handleImportFile(file) {
     await restoreBilibiliAccessSettings();
     await renderHistory();
     await ensureBilibiliCredentialReady();
-    log("info", "已导入 IndexedDB 配置和历史数据");
+    log("info", "已导入IndexedDB配置和历史数据");
   } catch (error) {
     log("error", error instanceof Error ? error.message : "导入失败");
   } finally {
@@ -2130,7 +2130,7 @@ async function handleImportFile(file) {
 }
 
 async function handleClearHistory() {
-  if (!confirm("确认清空本工具的全部本地数据？历史记录、模型配置和精简 B站 Cookie 都会删除。")) {
+  if (!confirm("确认清空本工具的全部本地数据？历史记录、模型配置和精简B站Cookie都会删除。")) {
     return;
   }
 
@@ -2151,7 +2151,7 @@ async function handleDeleteHistoryRecord(record) {
   if ((currentTask.historyId || currentTask.taskId) === record.id) {
     await resetWorkflow();
   }
-  log("warning", "已删除 1 条历史记录");
+  log("warning", "已删除1条历史记录");
 }
 
 function bindEvents() {
@@ -2289,7 +2289,7 @@ async function init() {
     await renderHistory();
     await ensureBilibiliCredentialReady();
   } catch (error) {
-    log("error", error instanceof Error ? error.message : "IndexedDB 初始化失败");
+    log("error", error instanceof Error ? error.message : "IndexedDB初始化失败");
   }
 
   refreshHealth();

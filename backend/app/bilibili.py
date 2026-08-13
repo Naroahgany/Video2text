@@ -179,18 +179,18 @@ class AccessStrategy:
         if self.mode == BilibiliAccessMode.ENHANCED_HEADERS:
             return "增强请求头"
         if self.mode == BilibiliAccessMode.BILIBILI_API:
-            return "B站公开 API"
+            return "B站公开API"
         if self.mode == BilibiliAccessMode.IMPERSONATE:
-            return "Chrome 指纹模拟"
+            return "Chrome指纹模拟"
         if self.mode == BilibiliAccessMode.BROWSER_COOKIE:
             browser = _browser_label(self.browser or BrowserCookieSource.CHROME)
-            return f"浏览器 Cookie（{browser}）"
+            return f"浏览器Cookie（{browser}）"
         if self.mode == BilibiliAccessMode.COOKIES_FILE:
-            return "cookies.txt 导入"
+            return "cookies.txt导入"
         if self.mode == BilibiliAccessMode.COOKIE_HEADER:
-            return "精简 Cookie"
+            return "精简Cookie"
         if self.mode == BilibiliAccessMode.LOCAL_BROWSER_PROFILE:
-            return "本地专用浏览器 Profile"
+            return "本地专用浏览器Profile"
         return "自动访问"
 
 
@@ -306,7 +306,7 @@ def parse_bilibili_input(raw_input: str) -> ParsedBilibiliInput:
 
     text = raw_input.strip()
     if not text:
-        raise BilibiliError(BilibiliErrorCode.INPUT_UNRECOGNIZED, "请输入 B站视频链接、分享文本或 BV 号")
+        raise BilibiliError(BilibiliErrorCode.INPUT_UNRECOGNIZED, "请输入B站视频链接、分享文本或BV号")
 
     bv_id = _extract_bv_id(text)
     url = _extract_bilibili_url(text)
@@ -338,7 +338,7 @@ def parse_bilibili_input(raw_input: str) -> ParsedBilibiliInput:
 
     raise BilibiliError(
         BilibiliErrorCode.INPUT_UNRECOGNIZED,
-        "未识别到 B站视频链接或 BV 号，请粘贴普通 B站网址、完整分享文本或 BV 号",
+        "未识别到B站视频链接或BV号，请粘贴普通B站网址、完整分享文本或BV号",
     )
 
 
@@ -377,7 +377,7 @@ async def fetch_video_info(
         except Exception as exc:  # pragma: no cover - yt-dlp can raise mixed internal errors
             error = BilibiliError(
                 BilibiliErrorCode.YTDLP_ERROR,
-                f"yt-dlp 获取视频信息失败：{_sanitize_external_message(exc)}",
+                f"yt-dlp获取视频信息失败：{_sanitize_external_message(exc)}",
             )
         else:
             attempts.append(AccessAttempt(strategy.mode.value, strategy.label, True))
@@ -463,7 +463,7 @@ async def download_subtitle(
     except httpx.RequestError as exc:
         raise BilibiliError(
             BilibiliErrorCode.SUBTITLE_FETCH_FAILED,
-            f"字幕获取失败，请检查网络或 B站返回：{_sanitize_external_message(exc)}",
+            f"字幕获取失败，请检查网络或B站返回：{_sanitize_external_message(exc)}",
         ) from exc
 
     if response.status_code >= 400:
@@ -526,7 +526,7 @@ def _emit_subtitle_list_debug(
         else []
     )
     subtitle_count = len(subtitles) if isinstance(subtitles, list) else 0
-    _emit_debug(debug_logger, f"{label} 响应：subtitleList.count={subtitle_count}")
+    _emit_debug(debug_logger, f"{label}响应：subtitleList.count={subtitle_count}")
     if not isinstance(subtitles, list):
         return
 
@@ -568,7 +568,7 @@ def _extract_video_info_sync(url: str, strategy: AccessStrategy) -> dict[str, An
     with YoutubeDL(ydl_options) as ydl:
         info = ydl.extract_info(url, download=False)
     if not isinstance(info, dict):
-        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "yt-dlp 返回的视频信息格式无法识别")
+        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "yt-dlp返回的视频信息格式无法识别")
     return info
 
 
@@ -591,7 +591,7 @@ def _extract_subtitle_only_info_sync(url: str, access_config: BilibiliAccessConf
     with YoutubeDL(ydl_options) as ydl:
         info = ydl.extract_info(url, download=False)
     if not isinstance(info, dict):
-        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "yt-dlp 字幕路径返回格式无法识别")
+        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "yt-dlp字幕路径返回格式无法识别")
     return info
 
 
@@ -617,12 +617,12 @@ def _strategy_ydl_options(strategy: AccessStrategy) -> dict[str, Any]:
 
     if strategy.mode == BilibiliAccessMode.COOKIES_FILE:
         if not strategy.cookies_file_path:
-            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择 cookies.txt 模式，但没有收到 cookies.txt 文件")
+            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择cookies.txt模式，但没有收到cookies.txt文件")
         options["cookiefile"] = str(strategy.cookies_file_path)
 
     if strategy.mode == BilibiliAccessMode.COOKIE_HEADER:
         if not strategy.cookie_header:
-            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择精简 Cookie 模式，但没有收到 Cookie")
+            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择精简Cookie模式，但没有收到Cookie")
         options["http_headers"] = {
             **_bilibili_headers(),
             "Cookie": strategy.cookie_header,
@@ -769,7 +769,7 @@ async def _extract_video_info_via_local_profile(parsed: ParsedBilibiliInput) -> 
     )
     if html_info:
         return html_info
-    message = attempts[-1].message if attempts else "本地专用浏览器 Profile 未能获取视频页信息"
+    message = attempts[-1].message if attempts else "本地专用浏览器Profile未能获取视频页信息"
     raise BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_412 if "412" in message else BilibiliErrorCode.COOKIE_INVALID, message)
 
 
@@ -779,7 +779,7 @@ async def _extract_video_info_via_bilibili_api(
 ) -> BilibiliVideoInfo:
     bvid = parsed.bv_id or _extract_bv_id(parsed.url)
     if not bvid:
-        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "B站公开 API 需要 BV 号，当前输入无法提取")
+        raise BilibiliError(BilibiliErrorCode.VIDEO_INFO_FAILED, "B站公开API需要BV号，当前输入无法提取")
 
     endpoint = "https://api.bilibili.com/x/web-interface/view"
     params: dict[str, object] = {"bvid": bvid}
@@ -800,11 +800,11 @@ async def _extract_video_info_via_bilibili_api(
                 source_name = f"{_video_info_api_label(access_config.mode)}（WBI view）"
                 response = await client.get(endpoint, params=params, headers=_bilibili_headers(), cookies=cookies)
     except httpx.TimeoutException as exc:
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_TIMEOUT, f"{source_name} 获取视频信息超时") from exc
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_TIMEOUT, f"{source_name}获取视频信息超时") from exc
     except httpx.RequestError as exc:
         raise BilibiliError(
             BilibiliErrorCode.BILIBILI_API_ERROR,
-            f"{source_name} 获取视频信息失败：{_sanitize_external_message(exc)}",
+            f"{source_name}获取视频信息失败：{_sanitize_external_message(exc)}",
         ) from exc
 
     if response.status_code >= 400:
@@ -813,34 +813,34 @@ async def _extract_video_info_via_bilibili_api(
     try:
         payload = response.json()
     except ValueError as exc:
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name} 返回内容不是有效 JSON") from exc
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name}返回内容不是有效JSON") from exc
 
     code = payload.get("code") if isinstance(payload, dict) else None
     if code != 0:
-        message = str(payload.get("message") or f"{source_name} 返回异常") if isinstance(payload, dict) else f"{source_name} 返回异常"
+        message = str(payload.get("message") or f"{source_name}返回异常") if isinstance(payload, dict) else f"{source_name}返回异常"
         if code in {-404, 404}:
             raise BilibiliError(BilibiliErrorCode.VIDEO_UNAVAILABLE, "B站视频不存在或无法访问")
         if code in {-403, 403}:
-            raise BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, f"{source_name} 返回访问被拒绝或权限受限")
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name} 返回异常：{message}")
+            raise BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, f"{source_name}返回访问被拒绝或权限受限")
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name}返回异常：{message}")
 
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, dict):
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name} 返回的视频信息格式无法识别")
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, f"{source_name}返回的视频信息格式无法识别")
 
     return _normalize_api_video_info(parsed, data)
 
 
 def _video_info_api_label(mode: BilibiliAccessMode) -> str:
     if mode == BilibiliAccessMode.COOKIE_HEADER:
-        return "精简 Cookie 视频信息 API"
+        return "精简Cookie视频信息API"
     if mode == BilibiliAccessMode.LOCAL_BROWSER_PROFILE:
-        return "本地 Profile 视频信息 API"
+        return "本地Profile视频信息API"
     if mode == BilibiliAccessMode.BROWSER_COOKIE:
-        return "浏览器 Cookie 视频信息 API"
+        return "浏览器Cookie视频信息API"
     if mode == BilibiliAccessMode.COOKIES_FILE:
-        return "cookies.txt 视频信息 API"
-    return "B站公开 API"
+        return "cookies.txt视频信息API"
+    return "B站公开API"
 
 
 def _normalize_api_video_info(parsed: ParsedBilibiliInput, data: dict[str, Any]) -> BilibiliVideoInfo:
@@ -938,8 +938,8 @@ async def _enrich_player_api_subtitles(
         ep_id = _read_int(current_info.get("epid")) or _read_int(current_info.get("ep_id"))
         debug_hint = _subtitle_request_debug_hint(bvid, aid, cid, ep_id)
         if not cid or not (bvid or aid):
-            attempts.append(SubtitlePathAttempt("player_api", "B站播放器字幕接口", False, f"缺少 aid/bvid/cid；{debug_hint}"))
-            _emit_debug(debug_logger, f"播放器字幕接口跳过：缺少 aid/bvid/cid；{debug_hint}")
+            attempts.append(SubtitlePathAttempt("player_api", "B站播放器字幕接口", False, f"缺少aid/bvid/cid；{debug_hint}"))
+            _emit_debug(debug_logger, f"播放器字幕接口跳过：缺少aid/bvid/cid；{debug_hint}")
             return
 
         if config.mode == BilibiliAccessMode.LOCAL_BROWSER_PROFILE:
@@ -949,11 +949,11 @@ async def _enrich_player_api_subtitles(
                     _emit_debug(
                         debug_logger,
                         (
-                            f"{label} 请求前："
+                            f"{label}请求前："
                             f"playerApiParams={_debug_params(params)}，"
                             f"bvid={bvid or '未提供'}，aid={aid or '未提供'}，cid={cid}，"
-                            f"Cookie是否存在：本地 Profile 页面上下文，"
-                            f"Referer=当前 B站视频页"
+                            f"Cookie是否存在：本地Profile页面上下文，"
+                            f"Referer=当前B站视频页"
                         ),
                     )
                     payload = await asyncio.to_thread(fetch_player_wbi_payload_from_profile, parsed.url, params)
@@ -966,7 +966,7 @@ async def _enrich_player_api_subtitles(
                             source,
                             label,
                             added > 0,
-                            f"页面内 fetch 返回 {subtitle_count} 条，新增 {added} 条字幕候选；{debug_hint}",
+                            f"页面内fetch返回{subtitle_count}条，新增{added}条字幕候选；{debug_hint}",
                         ),
                     )
                 except RuntimeError as exc:
@@ -982,7 +982,7 @@ async def _enrich_player_api_subtitles(
                     _emit_debug(
                         debug_logger,
                         (
-                            f"{label} 请求前：endpoint={endpoint}，"
+                            f"{label}请求前：endpoint={endpoint}，"
                             f"playerApiParams={_debug_params(params)}，"
                             f"bvid={bvid or '未提供'}，aid={aid or '未提供'}，cid={cid}，"
                             f"Cookie是否存在：{_cookie_presence_label(cookies)}，"
@@ -993,7 +993,7 @@ async def _enrich_player_api_subtitles(
                     if response.status_code >= 400:
                         error = _map_http_status(response.status_code, label)
                         attempts.append(SubtitlePathAttempt(source, label, False, error.message))
-                        _emit_debug(debug_logger, f"{label} 请求失败：HTTP {response.status_code}")
+                        _emit_debug(debug_logger, f"{label}请求失败：HTTP {response.status_code}")
                         continue
                     payload = response.json()
                     _append_player_subtitle_candidates(payload, source, candidates, existing_urls, aid=aid, cid=cid)
@@ -1005,11 +1005,11 @@ async def _enrich_player_api_subtitles(
                             source,
                             label,
                             added > 0,
-                            f"接口返回 {subtitle_count} 条，新增 {added} 条字幕候选；{debug_hint}",
+                            f"接口返回{subtitle_count}条，新增{added}条字幕候选；{debug_hint}",
                         ),
                     )
                 except ValueError:
-                    attempts.append(SubtitlePathAttempt(source, label, False, "返回内容不是有效 JSON"))
+                    attempts.append(SubtitlePathAttempt(source, label, False, "返回内容不是有效JSON"))
                 except (httpx.RequestError, BilibiliError) as exc:
                     attempts.append(SubtitlePathAttempt(source, label, False, _sanitize_external_message(exc)))
 
@@ -1019,7 +1019,7 @@ async def _enrich_player_api_subtitles(
                 _emit_debug(
                     debug_logger,
                     (
-                        "WBI 签名播放器字幕接口请求前："
+                        "WBI签名播放器字幕接口请求前："
                         "endpoint=https://api.bilibili.com/x/player/wbi/v2，"
                         f"playerApiParams={_debug_params(signed_params)}，"
                         f"bvid={bvid or '未提供'}，aid={aid or '未提供'}，cid={cid}，"
@@ -1034,9 +1034,9 @@ async def _enrich_player_api_subtitles(
                     cookies=cookies,
                 )
                 if response.status_code >= 400:
-                    error = _map_http_status(response.status_code, "WBI 签名播放器字幕接口")
-                    attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI 签名播放器字幕接口", False, error.message))
-                    _emit_debug(debug_logger, f"WBI 签名播放器字幕接口请求失败：HTTP {response.status_code}")
+                    error = _map_http_status(response.status_code, "WBI签名播放器字幕接口")
+                    attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI签名播放器字幕接口", False, error.message))
+                    _emit_debug(debug_logger, f"WBI签名播放器字幕接口请求失败：HTTP {response.status_code}")
                 else:
                     payload = response.json()
                     _append_player_subtitle_candidates(
@@ -1048,20 +1048,20 @@ async def _enrich_player_api_subtitles(
                         cid=cid,
                     )
                     subtitle_count = _player_subtitle_count(payload)
-                    _emit_subtitle_list_debug(debug_logger, "WBI 签名播放器字幕接口", payload)
+                    _emit_subtitle_list_debug(debug_logger, "WBI签名播放器字幕接口", payload)
                     added = len(candidates) - before_count
                     attempts.append(
                         SubtitlePathAttempt(
                             "player_wbi_signed_api",
-                            "WBI 签名播放器字幕接口",
+                            "WBI签名播放器字幕接口",
                             added > 0,
-                            f"接口返回 {subtitle_count} 条，新增 {added} 条字幕候选；{debug_hint}",
+                            f"接口返回{subtitle_count}条，新增{added}条字幕候选；{debug_hint}",
                         ),
                     )
             except ValueError:
-                attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI 签名播放器字幕接口", False, "返回内容不是有效 JSON"))
+                attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI签名播放器字幕接口", False, "返回内容不是有效JSON"))
             except (httpx.RequestError, BilibiliError) as exc:
-                attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI 签名播放器字幕接口", False, _sanitize_external_message(exc)))
+                attempts.append(SubtitlePathAttempt("player_wbi_signed_api", "WBI签名播放器字幕接口", False, _sanitize_external_message(exc)))
 
     try:
         await run_player_requests(raw_info, access_config)
@@ -1072,7 +1072,7 @@ async def _enrich_player_api_subtitles(
         before_count = len(candidates)
         html_info = await _extract_video_info_via_html(parsed, access_config, attempts)
         if html_info:
-            _emit_debug(debug_logger, "HTML 初始化数据回退已返回视频信息，准备合并 aid/cid/pages/subtitle 候选")
+            _emit_debug(debug_logger, "HTML初始化数据回退已返回视频信息，准备合并aid/cid/pages/subtitle候选")
             raw_info = _merge_raw_info(raw_info, html_info.raw_info)
             for candidate in html_info.subtitle_candidates:
                 if candidate.url not in existing_urls:
@@ -1082,25 +1082,25 @@ async def _enrich_player_api_subtitles(
                 try:
                     await run_player_requests(raw_info, access_config)
                 except BilibiliError as exc:
-                    attempts.append(SubtitlePathAttempt("html_initial_state", "HTML 初始化数据回退", False, exc.message))
+                    attempts.append(SubtitlePathAttempt("html_initial_state", "HTML初始化数据回退", False, exc.message))
 
     if not candidates:
         before_count = len(candidates)
         try:
-            _emit_debug(debug_logger, "yt-dlp 字幕路径请求前：--skip-download + --write-subs + --write-auto-subs")
+            _emit_debug(debug_logger, "yt-dlp字幕路径请求前：--skip-download + --write-subs + --write-auto-subs")
             info = await asyncio.to_thread(_extract_subtitle_only_info_sync, parsed.url, access_config)
             for candidate in _collect_subtitle_candidates(_select_current_info(parsed, info)):
                 if candidate.url not in existing_urls:
                     candidates.append(candidate)
                     existing_urls.add(candidate.url)
             added = len(candidates) - before_count
-            _emit_debug(debug_logger, f"yt-dlp 字幕路径返回字幕候选：新增 {added} 条")
-            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp 字幕路径", True, f"新增 {added} 条字幕候选"))
+            _emit_debug(debug_logger, f"yt-dlp字幕路径返回字幕候选：新增{added}条")
+            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp字幕路径", True, f"新增{added}条字幕候选"))
         except (DownloadError, ExtractorError) as exc:
             error = _map_ytdlp_error(exc)
-            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp 字幕路径", False, error.message))
+            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp字幕路径", False, error.message))
         except Exception as exc:
-            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp 字幕路径", False, _sanitize_external_message(exc)))
+            attempts.append(SubtitlePathAttempt("yt_dlp_subtitle", "yt-dlp字幕路径", False, _sanitize_external_message(exc)))
 
     if attempts:
         existing_access_attempts = list(video_info.access_attempts)
@@ -1154,7 +1154,7 @@ def _profile_page_subtitle_requests(
     ep_id: int | None,
 ) -> list[tuple[str, str, dict[str, object]]]:
     return [
-        (f"{source}_profile", f"{label}（页面内 fetch）", params)
+        (f"{source}_profile", f"{label}（页面内fetch）", params)
         for source, label, params in _wbi_subtitle_param_variants(bvid, aid, cid, ep_id)
     ]
 
@@ -1171,11 +1171,11 @@ def _wbi_subtitle_param_variants(
         response_params["aid"] = aid
     elif bvid:
         response_params["bvid"] = bvid
-    variants.append(("player_wbi_api", "B站播放器 wbi 字幕接口", response_params))
+    variants.append(("player_wbi_api", "B站播放器wbi字幕接口", response_params))
     if ep_id:
         ep_params = dict(response_params)
         ep_params["ep_id"] = ep_id
-        variants.append(("player_wbi_api_ep", "B站播放器 wbi 字幕接口（ep_id）", ep_params))
+        variants.append(("player_wbi_api_ep", "B站播放器wbi字幕接口（ep_id）", ep_params))
     return variants
 
 
@@ -1242,11 +1242,11 @@ async def _fetch_wbi_keys(client: httpx.AsyncClient, cookies: httpx.Cookies | No
             cookies=cookies,
         )
     except httpx.TimeoutException as exc:
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_TIMEOUT, "WBI nav 获取超时") from exc
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_TIMEOUT, "WBI nav获取超时") from exc
     except httpx.RequestError as exc:
         raise BilibiliError(
             BilibiliErrorCode.BILIBILI_API_ERROR,
-            f"WBI nav 获取失败：{_sanitize_external_message(exc)}",
+            f"WBI nav获取失败：{_sanitize_external_message(exc)}",
         ) from exc
 
     if response.status_code >= 400:
@@ -1254,13 +1254,13 @@ async def _fetch_wbi_keys(client: httpx.AsyncClient, cookies: httpx.Cookies | No
     try:
         payload = response.json()
     except ValueError as exc:
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, "WBI nav 返回内容不是有效 JSON") from exc
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, "WBI nav返回内容不是有效JSON") from exc
 
     wbi_img = payload.get("data", {}).get("wbi_img", {}) if isinstance(payload, dict) else {}
     img_key = _wbi_key_from_url(str(wbi_img.get("img_url") or ""))
     sub_key = _wbi_key_from_url(str(wbi_img.get("sub_url") or ""))
     if not img_key or not sub_key:
-        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, "WBI nav 未返回可用 key")
+        raise BilibiliError(BilibiliErrorCode.BILIBILI_API_ERROR, "WBI nav未返回可用key")
     mixin_key = "".join((img_key + sub_key)[index] for index in MIXIN_KEY_ENC_TAB)[:32]
     return WbiKeys(img_key=img_key, sub_key=sub_key, mixin_key=mixin_key)
 
@@ -1298,12 +1298,12 @@ async def _extract_video_info_via_html(
             async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
                 response = await client.get(parsed.url, headers=_bilibili_headers(), cookies=cookies)
             if response.status_code >= 400:
-                error = _map_http_status(response.status_code, "HTML 初始化数据回退")
-                attempts.append(SubtitlePathAttempt("html_initial_state", "HTML 初始化数据回退", False, error.message))
+                error = _map_http_status(response.status_code, "HTML初始化数据回退")
+                attempts.append(SubtitlePathAttempt("html_initial_state", "HTML初始化数据回退", False, error.message))
                 return None
             html = response.text
     except (httpx.RequestError, BilibiliError, RuntimeError) as exc:
-        attempts.append(SubtitlePathAttempt("html_initial_state", "HTML 初始化数据回退", False, _sanitize_external_message(exc)))
+        attempts.append(SubtitlePathAttempt("html_initial_state", "HTML初始化数据回退", False, _sanitize_external_message(exc)))
         return None
 
     try:
@@ -1316,11 +1316,11 @@ async def _extract_video_info_via_html(
         info = _html_payload_to_info(parsed, initial_state, playinfo)
         _merge_player_resource_params(info, page_state.get("resourceUrls") if isinstance(page_state, dict) else None)
     except ValueError as exc:
-        attempts.append(SubtitlePathAttempt("html_initial_state", "HTML 初始化数据回退", False, str(exc)))
+        attempts.append(SubtitlePathAttempt("html_initial_state", "HTML初始化数据回退", False, str(exc)))
         return None
 
     video_info = _normalize_api_video_info(parsed, info)
-    attempts.append(SubtitlePathAttempt("html_initial_state", "HTML 初始化数据回退", True, "已补齐视频和字幕候选信息"))
+    attempts.append(SubtitlePathAttempt("html_initial_state", "HTML初始化数据回退", True, "已补齐视频和字幕候选信息"))
     return video_info
 
 
@@ -1331,7 +1331,7 @@ def _extract_json_assignment(html: str, pattern: re.Pattern[str]) -> dict[str, A
     try:
         payload = json.loads(match.group(1))
     except json.JSONDecodeError as exc:
-        raise ValueError("HTML 初始化数据不是有效 JSON") from exc
+        raise ValueError("HTML初始化数据不是有效JSON") from exc
     return payload if isinstance(payload, dict) else {}
 
 
@@ -1355,7 +1355,7 @@ def _html_payload_to_info(
     )
     bvid = str(video_data.get("bvid") or initial_state.get("bvid") or parsed.bv_id or "")
     if not (aid or bvid or cid):
-        raise ValueError("HTML 初始化数据缺少 aid/bvid/cid")
+        raise ValueError("HTML初始化数据缺少aid/bvid/cid")
 
     subtitles = _extract_html_subtitles(initial_state, playinfo)
     return {
@@ -1699,48 +1699,48 @@ def _map_ytdlp_error(exc: Exception) -> BilibiliError:
     if "could not copy" in lowered and "cookie" in lowered and "database" in lowered:
         return BilibiliError(
             BilibiliErrorCode.COOKIE_DATABASE_COPY_FAILED,
-            "浏览器 Cookie 数据库复制失败。可尝试关闭浏览器和后台进程、换用 Edge / Firefox，或改用 cookies.txt 导入模式。",
+            "浏览器Cookie数据库复制失败。可尝试关闭浏览器和后台进程、换用Edge / Firefox，或改用cookies.txt导入模式。",
         )
     if any(token in lowered for token in ("http error 412", "precondition failed", "http 412")):
         return BilibiliError(
             BilibiliErrorCode.BILIBILI_HTTP_412,
-            "B站返回 HTTP 412 Precondition Failed，通常是风控或访问前置条件失败。可重新打开本地 B站登录窗口后再试。",
+            "B站返回HTTP 412 Precondition Failed，通常是风控或访问前置条件失败。可重新打开本地B站登录窗口后再试。",
         )
     if any(token in lowered for token in ("http error 403", "forbidden", "http 403")):
-        return BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, "B站返回 HTTP 403，访问被拒绝或视频权限受限")
+        return BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, "B站返回HTTP 403，访问被拒绝或视频权限受限")
     if any(token in lowered for token in ("404", "not found", "不存在", "已失效")):
         return BilibiliError(BilibiliErrorCode.VIDEO_UNAVAILABLE, "B站视频不存在或无法访问")
     if any(token in lowered for token in ("timed out", "timeout")):
         return BilibiliError(BilibiliErrorCode.BILIBILI_TIMEOUT, "B站访问超时，请稍后重试或切换访问模式")
     if "unable to load cookies" in lowered or "cookie file" in lowered or "invalid cookie" in lowered:
-        return BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt 无法读取或 Cookie 已失效，请重新导出后再试")
+        return BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt无法读取或Cookie已失效，请重新导出后再试")
     if "impersonate" in lowered and "curl_cffi" in lowered:
         return BilibiliError(
             BilibiliErrorCode.VIDEO_INFO_FAILED,
-            "Chrome 指纹模拟不可用：当前 Python 环境缺少 curl_cffi 或 yt-dlp 无法启用该能力",
+            "Chrome指纹模拟不可用：当前Python环境缺少curl_cffi或yt-dlp无法启用该能力",
         )
     if any(token in lowered for token in ("login", "cookies", "cookie", "private", "会员", "登录")):
-        return BilibiliError(BilibiliErrorCode.LOGIN_REQUIRED, "该视频可能需要登录权限、付费权限或有效 Cookie，MVP 暂不支持受限内容")
+        return BilibiliError(BilibiliErrorCode.LOGIN_REQUIRED, "该视频可能需要登录权限、付费权限或有效Cookie，MVP暂不支持受限内容")
 
-    return BilibiliError(BilibiliErrorCode.YTDLP_ERROR, f"yt-dlp 获取视频信息失败：{message}")
+    return BilibiliError(BilibiliErrorCode.YTDLP_ERROR, f"yt-dlp获取视频信息失败：{message}")
 
 
 def _map_http_status(status_code: int, source: str) -> BilibiliError:
     if status_code == 412:
         return BilibiliError(
             BilibiliErrorCode.BILIBILI_HTTP_412,
-            f"{source} 返回 HTTP 412 Precondition Failed，通常是风控或访问前置条件失败",
+            f"{source}返回HTTP 412 Precondition Failed，通常是风控或访问前置条件失败",
         )
     if status_code == 403:
-        return BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, f"{source} 返回 HTTP 403，访问被拒绝或权限受限")
+        return BilibiliError(BilibiliErrorCode.BILIBILI_HTTP_403, f"{source}返回HTTP 403，访问被拒绝或权限受限")
     if status_code == 404:
         return BilibiliError(BilibiliErrorCode.VIDEO_UNAVAILABLE, "B站视频不存在或无法访问")
-    return BilibiliError(BilibiliErrorCode.BILIBILI_RETURNED_ERROR, f"{source} 返回异常：HTTP {status_code}")
+    return BilibiliError(BilibiliErrorCode.BILIBILI_RETURNED_ERROR, f"{source}返回异常：HTTP {status_code}")
 
 
 def _choose_final_access_error(errors: list[BilibiliError]) -> BilibiliError:
     if not errors:
-        return BilibiliError(BilibiliErrorCode.YTDLP_ERROR, "yt-dlp 获取视频信息失败")
+        return BilibiliError(BilibiliErrorCode.YTDLP_ERROR, "yt-dlp获取视频信息失败")
 
     priority = {
         BilibiliErrorCode.BILIBILI_HTTP_412: 0,
@@ -1758,7 +1758,7 @@ def _with_attempt_summary(message: str, attempts: list[AccessAttempt]) -> str:
     if not attempts:
         return message
     labels = "、".join(attempt.label for attempt in attempts)
-    return f"{message} 已尝试：{labels}。"
+    return f"{message}已尝试：{labels}。"
 
 
 def _load_cookies_for_httpx(access_config: BilibiliAccessConfig | None) -> httpx.Cookies | None:
@@ -1768,7 +1768,7 @@ def _load_cookies_for_httpx(access_config: BilibiliAccessConfig | None) -> httpx
         return _load_browser_cookies_for_httpx(access_config.browser)
     if access_config.mode == BilibiliAccessMode.COOKIES_FILE:
         if not access_config.cookies_file_path:
-            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择 cookies.txt 模式，但没有收到 cookies.txt 文件")
+            raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "已选择cookies.txt模式，但没有收到cookies.txt文件")
         return _load_netscape_cookie_file(access_config.cookies_file_path)
     if access_config.mode == BilibiliAccessMode.COOKIE_HEADER:
         return _load_cookie_header(access_config.cookie_header)
@@ -1808,7 +1808,7 @@ def _load_browser_cookies_for_httpx(browser: BrowserCookieSource) -> httpx.Cooki
     if valid_count == 0:
         raise BilibiliError(
             BilibiliErrorCode.COOKIE_INVALID,
-            f"未从 {_browser_label(browser)} 读取到可用于 B站的 Cookie，请确认该浏览器已登录 B站，或改用 cookies.txt 导入模式。",
+            f"未从{_browser_label(browser)}读取到可用于B站的Cookie，请确认该浏览器已登录B站，或改用cookies.txt导入模式。",
         )
 
     return cookies
@@ -1824,7 +1824,7 @@ def _load_cookie_header(raw_cookie: str) -> httpx.Cookies:
     if not simplified:
         raise BilibiliError(
             BilibiliErrorCode.COOKIE_INVALID,
-            "未找到可用的 6 项精简 B站 Cookie，请重新打开本地 B站登录窗口或重新粘贴 Cookie。",
+            "未找到可用的6项精简B站Cookie，请重新打开本地B站登录窗口或重新粘贴Cookie。",
         )
     return cookie_header_to_httpx_cookies(simplified)
 
@@ -1835,7 +1835,7 @@ def _load_netscape_cookie_file(path: Path) -> httpx.Cookies:
     try:
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     except OSError as exc:
-        raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt 无法读取，请重新选择文件") from exc
+        raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt无法读取，请重新选择文件") from exc
 
     for raw_line in lines:
         line = raw_line.strip()
@@ -1863,7 +1863,7 @@ def _load_netscape_cookie_file(path: Path) -> httpx.Cookies:
         valid_count += 1
 
     if valid_count == 0:
-        raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt 中没有可用 Cookie，请确认文件格式为 Netscape cookies.txt")
+        raise BilibiliError(BilibiliErrorCode.COOKIE_INVALID, "cookies.txt中没有可用Cookie，请确认文件格式为Netscape cookies.txt")
 
     return cookies
 
